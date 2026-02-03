@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Scan {
+  id             String    @id @default(cuid())
+  target         String
+  status         String    @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED, TIMED_OUT, INTERRUPTED
+  type           String    @default("MANUAL")
+  currentIndex   Int       @default(0)
+  totalIps       Int       @default(0)
+  ipList         String?   // JSON string of all IPs to scan
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  findings       Finding[]
+}
+
+model Finding {
+  id            String   @id @default(cuid())
+  ip            String
+  port          Int
+  service       String?
+  version       String?
+  banner        String?
+  severity      String   // LOW, MEDIUM, HIGH, CRITICAL
+  description   String?
+  vulnerability String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Forensic and Remediation Fields
+  remediation      String?
+  forensics        String?
+  upstreamVersion  String?
+  confidence       Int?      @default(100)
+  discoveryMethod  String?   @default("ACTIVE_PROBE")
+  domains          String?   // Comma separated list of domains
+  techStack        String?   // Detected technologies
+
+  // Many-to-many relationship with scans
+  scans         Scan[]
+
+  @@unique([ip, port], name: "ip_port")
+}
+
+model Schedule {
+  id        String   @id @default(cuid())
+  target    String
+  frequency String   // DAILY, WEEKLY
+  nextRun   DateTime
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
