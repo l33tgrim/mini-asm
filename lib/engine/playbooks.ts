@@ -38,4 +38,20 @@ export const ALL_PLAYBOOKS: Playbook[] = [
         scenarioIds: ['recon-exposure', 'security-headers', 'waf-detect-bypass'],
         attckTactics: ['Defense Evasion', 'Initial Access'],
     },
+    {
+        id: 'web-app-assessment',
+        name: 'Web Application Assessment',
+        description: 'Full non-destructive web hygiene sweep: headers, cookies, CORS, methods, redirects, directory listing and leaked files.',
+        threat: 'Opportunistic web application attacker',
+        scenarioIds: ['recon-exposure', 'security-headers', 'cookie-security', 'cors-misconfig', 'http-methods', 'open-redirect', 'directory-listing', 'exposed-services'],
+        attckTactics: ['Initial Access', 'Collection'],
+    },
+    {
+        id: 'brand-and-dns',
+        name: 'Brand & DNS Exposure',
+        description: 'DNS footprint, email spoofing posture, and dangling subdomain takeover risk.',
+        threat: 'Phishing / brand abuse actor',
+        scenarioIds: ['recon-exposure', 'email-posture', 'subdomain-takeover', 'tls-posture'],
+        attckTactics: ['Reconnaissance', 'Resource Development'],
+    },
 ];

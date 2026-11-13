@@ -6,8 +6,8 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mini ASM | Attack Surface Management",
-  description: "Next-gen Vulnerability and Attack Surface Management Tool",
+  title: "PayInc Security Validation",
+  description: "PayInc breach & attack simulation and attack surface management platform",
 };
 
 export default function RootLayout({

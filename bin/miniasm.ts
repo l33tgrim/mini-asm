@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { scenarioCatalog, listPlaybooks } from '@/lib/engine/registry';
 import { runScenario, runPlaybook, runSteps, type EngagementContext } from '@/lib/engine/runner';
 import { loadEngagementContext, persistRun, loadCustomPlaybook } from '@/lib/engine/persist';
+import { runAutopilot } from '@/lib/engine/autopilot';
 import {
     generateVerifyToken,
     verifyDomainOwnership,
@@ -261,6 +262,23 @@ async function main() {
             break;
         }
 
+        case 'autorun': {
+            const target = flags.target as string;
+            if (!target) throw new Error('usage: autorun --target <t> --engagement <id> [--mode ACTIVE]');
+            const { eng } = await buildContext(engagementId, mode, target);
+            const result = await runAutopilot(target, eng);
+            if (engagementId) for (const r of result.runs) await persistRun(engagementId, r, 'autopilot');
+            out({
+                target: result.target,
+                mode: result.mode,
+                plannedBy: result.plannedBy,
+                risk: result.risk,
+                narrative: result.narrative,
+                scenarios: result.runs.map((r) => ({ scenario: r.scenarioName, status: r.status, summary: r.summary })),
+            });
+            break;
+        }
+
         case 'report': {
             if (!engagementId) throw new Error('--engagement is required');
             const eng = await prisma.engagement.findUnique({
@@ -320,6 +338,7 @@ async function main() {
                     'playbook:create --name X [--threat T] [--description Y] [--tactics "a,b"]',
                     'playbook:step --playbook <id> --scenario <scenarioId> [--params <json>] [--order <n>]',
                     'playbook:list',
+                    'autorun --target <t> --engagement <id> [--mode ACTIVE]   (AI autonomous assessment)',
                     'report --engagement <id> [--md]',
                     'scaffold "<threat description>" [--write lib/engine/scenarios/foo.ts]',
                 ],

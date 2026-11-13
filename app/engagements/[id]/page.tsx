@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import axios from 'axios';
 import {
     Shield, Plus, CheckCircle2, CircleDashed, Play, Lock, Unlock, AlertTriangle,
-    Copy, ClipboardCheck, Terminal, FileText, Trash2
+    Copy, ClipboardCheck, Terminal, FileText, Trash2, Sparkles
 } from 'lucide-react';
 
 interface ScopeEntry { id: string; value: string; kind: string; verified: boolean; verifyToken?: string; verifyMethod?: string; }
@@ -37,6 +37,7 @@ export default function EngagementDetail() {
     const [target, setTarget] = useState('');
     const [busy, setBusy] = useState('');
     const [copied, setCopied] = useState('');
+    const [ai, setAi] = useState<{ risk: { score: number; grade: string; headline: string }; narrative: string; plannedBy: string } | null>(null);
 
     const load = useCallback(() => axios.get(`/api/engagements/${id}`).then((r) => setEng(r.data)).catch(() => {}), [id]);
     useEffect(() => {
@@ -81,6 +82,18 @@ export default function EngagementDetail() {
             await load();
         } catch (e) {
             alert('Run failed: ' + (e as { response?: { data?: { error?: string } } }).response?.data?.error);
+        } finally { setBusy(''); }
+    };
+
+    const autorun = async () => {
+        if (!target.trim()) { alert('Enter a target in scope first.'); return; }
+        setBusy('ai');
+        try {
+            const res = await axios.post(`/api/engagements/${id}/autorun`, { target });
+            setAi(res.data);
+            await load();
+        } catch (e) {
+            alert('Assessment failed: ' + (e as { response?: { data?: { error?: string } } }).response?.data?.error);
         } finally { setBusy(''); }
     };
 
@@ -171,9 +184,27 @@ export default function EngagementDetail() {
                     <button onClick={run} disabled={busy === 'run'} className="bg-primary text-primary-foreground rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2 disabled:opacity-50">
                         <Play className="w-4 h-4" /> {busy === 'run' ? 'Running…' : 'Run'}
                     </button>
+                    <button onClick={autorun} disabled={busy === 'ai'} title="Autonomous: recon, adaptive scenario plan, scoring, narrative"
+                        className="brand-gradient text-white rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+                        <Sparkles className="w-4 h-4" /> {busy === 'ai' ? 'Assessing…' : 'AI assessment'}
+                    </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> ● = active (needs authorized + verified scope). ○ = safe.</p>
+                <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1.5"><AlertTriangle className="w-3 h-3" /> ● = active (needs authorized + verified scope). ○ = safe. AI assessment plans its own scenario chain and respects the same gates.</p>
             </section>
+
+            {ai && (
+                <section className="p-5 rounded-2xl bg-card border border-primary/30">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2"><Sparkles className="w-4 h-4" /> AI Assessment</h2>
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-muted-foreground">planned by {ai.plannedBy}</span>
+                            <span className={`text-lg font-black ${['A', 'B'].includes(ai.risk.grade) ? 'text-emerald-400' : ai.risk.grade === 'C' ? 'text-amber-400' : 'text-red-400'}`}>{ai.risk.grade} · {ai.risk.score}/100</span>
+                        </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{ai.risk.headline}</p>
+                    <pre className="text-[12px] mt-3 whitespace-pre-wrap text-foreground/90 bg-background/50 rounded-lg p-3 leading-relaxed">{ai.narrative}</pre>
+                </section>
+            )}
 
             {/* Results */}
             <section>

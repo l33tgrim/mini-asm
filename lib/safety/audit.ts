@@ -15,7 +15,8 @@ export interface AuditEntry {
  */
 export async function audit(entry: AuditEntry): Promise<void> {
     const line = `[AUDIT] ${entry.action} target=${entry.target ?? '-'} actor=${entry.actor ?? 'system'} :: ${entry.detail ?? ''}`;
-    console.log(line);
+    // Audit goes to stderr so stdout stays clean for the CLI's JSON output.
+    console.error(line);
     try {
         await prisma.auditLog.create({
             data: {

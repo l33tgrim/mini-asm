@@ -65,12 +65,12 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-700 flex items-center justify-center shadow-lg shadow-primary/30">
+                    <div className="w-10 h-10 rounded-xl brand-gradient flex items-center justify-center shadow-lg shadow-primary/30">
                         <Shield className="text-white w-5 h-5" />
                     </div>
                     <div>
-                        <h1 className="text-lg font-black tracking-tight">Mini ASM</h1>
-                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Enterprise</p>
+                        <h1 className="text-lg font-black tracking-tight">PayInc</h1>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Security Validation</p>
                     </div>
                 </div>
             </div>

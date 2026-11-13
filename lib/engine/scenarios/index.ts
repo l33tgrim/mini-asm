@@ -10,6 +10,12 @@ import { proofOfReach } from './proof-of-reach';
 import { proofOfCommand } from './proof-of-command';
 import { proofOfData } from './proof-of-data';
 import { customHttpChecks } from './custom-http-checks';
+import { corsMisconfig } from './cors-misconfig';
+import { cookieSecurity } from './cookie-security';
+import { openRedirect } from './open-redirect';
+import { subdomainTakeover } from './subdomain-takeover';
+import { directoryListing } from './directory-listing';
+import { httpMethods } from './http-methods';
 
 /**
  * The scenario catalog. To add a scenario, create a file in this directory that
@@ -28,4 +34,10 @@ export const ALL_SCENARIOS: Scenario[] = [
     proofOfCommand,
     proofOfData,
     customHttpChecks,
+    corsMisconfig,
+    cookieSecurity,
+    openRedirect,
+    subdomainTakeover,
+    directoryListing,
+    httpMethods,
 ];
