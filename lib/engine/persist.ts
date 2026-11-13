@@ -1,7 +1,26 @@
 import { prisma } from '@/lib/prisma';
-import type { EngagementContext, ScenarioRunOutput } from './runner';
+import type { EngagementContext, ScenarioRunOutput, PlaybookStepInput } from './runner';
 import type { ScopeItem, ScopeKind } from '@/lib/safety/scope';
 import type { Mode } from './types';
+
+/** Load a user-defined custom playbook into ordered, parameterized steps. */
+export async function loadCustomPlaybook(
+    id: string
+): Promise<{ id: string; name: string; steps: PlaybookStepInput[] }> {
+    const pb = await prisma.customPlaybook.findUnique({
+        where: { id },
+        include: { steps: { orderBy: { order: 'asc' } } },
+    });
+    if (!pb) throw new Error(`custom playbook ${id} not found`);
+    return {
+        id: pb.id,
+        name: pb.name,
+        steps: pb.steps.map((s) => ({
+            scenarioId: s.scenarioId,
+            params: s.params ? (JSON.parse(s.params) as Record<string, unknown>) : {},
+        })),
+    };
+}
 
 /**
  * Build a gate context from a stored engagement. SAFE scenarios run against any

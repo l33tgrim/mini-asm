@@ -44,5 +44,6 @@ export function scenarioCatalog() {
         requiresActive: s.requiresActive,
         intrusive: s.intrusive,
         tags: s.tags ?? [],
+        params: s.params ?? [],
     }));
 }

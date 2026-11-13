@@ -28,7 +28,21 @@ export interface RunContext {
     engagementId?: string;
     // Shared bag so later scenarios reuse earlier recon (open ports, subdomains...).
     state: Record<string, unknown>;
+    // Per-run parameters supplied by a playbook step or a direct run. This is
+    // what lets one scenario test many different issues from configuration.
+    params: Record<string, unknown>;
     log: (msg: string) => void;
+}
+
+// Declares a parameter a scenario accepts, so the UI/CLI can offer it and
+// validate it. Purely descriptive; scenarios read values from ctx.params.
+export interface ScenarioParam {
+    key: string;
+    label: string;
+    type: 'string' | 'number' | 'boolean' | 'stringlist' | 'json';
+    required?: boolean;
+    default?: unknown;
+    help?: string;
 }
 
 export interface Scenario {
@@ -48,6 +62,8 @@ export interface Scenario {
     /** True if the scenario touches the target beyond passive recon. */
     intrusive: boolean;
     tags?: string[];
+    /** Parameters this scenario accepts (for modular, configurable checks). */
+    params?: ScenarioParam[];
     run: (ctx: RunContext) => Promise<ScenarioResult[]>;
 }
 

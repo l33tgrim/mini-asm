@@ -64,11 +64,53 @@ With `ANTHROPIC_API_KEY` set it uses Claude (Fable 5.2) to draft the spec;
 without it you get a local template. Either way you implement `run()` with safe
 primitives, then register it in `index.ts`.
 
-## Playbooks
+## Parameterized scenarios (test different issues from config)
 
-A playbook is an ordered bundle of scenarios that emulates a real threat. See
-`lib/engine/playbooks.ts`. Recon runs first so later scenarios reuse its
-discovery. Add a playbook by appending to `ALL_PLAYBOOKS`.
+A scenario can declare `params` and read them at runtime from `ctx.params`,
+using the helpers in `scenarios/_shared.ts` (`paramString`, `paramList`,
+`paramJson`). This lets one scenario test many different issues without new
+code. The reference example is `custom-http-checks`: supply a `checks` array of
+`{ path, title?, severity?, signature?, status? }` and it probes whatever you
+list, read-only.
+
+```ts
+params: [
+    { key: 'checks', label: 'Checks (JSON array)', type: 'json', help: '...' },
+],
+async run(ctx) {
+    const checks = paramJson<Check[]>(ctx, 'checks', DEFAULT_CHECKS);
+    // ...
+}
+```
+
+## Built-in playbooks
+
+A built-in playbook is an ordered bundle of scenarios that emulates a real
+threat. See `lib/engine/playbooks.ts`. Recon runs first so later scenarios reuse
+its discovery. Add one by appending to `ALL_PLAYBOOKS`.
+
+## Custom threat scenarios (modular, no code)
+
+Custom playbooks are user-defined threat scenarios stored in the database. Each
+is an ordered list of steps, and every step is a scenario plus optional JSON
+params. Build them three ways:
+
+- Web: the Threat Builder on the Scenarios page. Tick scenarios, add params,
+  name the threat, save. It then appears in each engagement's run dropdown under
+  "Custom threat scenarios".
+- API: `POST /api/playbooks` with `{ name, threat, steps: [{ scenarioId, params, order }] }`.
+- CLI:
+
+```bash
+npm run miniasm -- playbook:create --name "Secrets sweep" --threat "Secret hunter"
+npm run miniasm -- playbook:step --playbook <id> --scenario recon-exposure --order 0
+npm run miniasm -- playbook:step --playbook <id> --scenario custom-http-checks --order 1 \
+  --params '{"checks":[{"path":"/.env","title":"Env exposed","severity":"CRITICAL","signature":"^[A-Z0-9_]+="}]}'
+npm run miniasm -- playbook --custom <id> --target payinc.com --engagement <eid>
+```
+
+Custom playbooks run through the same gates as everything else, so a step that
+uses an active scenario still needs an authorized, verified engagement.
 
 ## Exec adapters (OS-level proof of command)
 

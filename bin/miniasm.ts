@@ -15,8 +15,8 @@
  */
 import { prisma } from '@/lib/prisma';
 import { scenarioCatalog, listPlaybooks } from '@/lib/engine/registry';
-import { runScenario, runPlaybook, type EngagementContext } from '@/lib/engine/runner';
-import { loadEngagementContext, persistRun } from '@/lib/engine/persist';
+import { runScenario, runPlaybook, runSteps, type EngagementContext } from '@/lib/engine/runner';
+import { loadEngagementContext, persistRun, loadCustomPlaybook } from '@/lib/engine/persist';
 import {
     generateVerifyToken,
     verifyDomainOwnership,
@@ -192,22 +192,72 @@ async function main() {
         case 'run': {
             const scenarioId = positional[1];
             const target = flags.target as string;
-            if (!scenarioId || !target) throw new Error('usage: run <scenarioId> --target <t> --engagement <id>');
+            if (!scenarioId || !target) throw new Error('usage: run <scenarioId> --target <t> --engagement <id> [--params <json>]');
+            const params = flags.params ? JSON.parse(flags.params as string) : {};
             const { eng } = await buildContext(engagementId, mode, target);
-            const result = await runScenario(scenarioId, target, eng);
+            const result = await runScenario(scenarioId, target, eng, {}, params);
             if (engagementId) await persistRun(engagementId, result);
             out(result);
             break;
         }
 
         case 'playbook': {
-            const playbookId = positional[1];
             const target = flags.target as string;
-            if (!playbookId || !target) throw new Error('usage: playbook <playbookId> --target <t> --engagement <id>');
+            if (!target) throw new Error('usage: playbook <playbookId> --target <t> | playbook --custom <id> --target <t>');
             const { eng } = await buildContext(engagementId, mode, target);
-            const result = await runPlaybook(playbookId, target, eng);
-            if (engagementId) for (const r of result.runs) await persistRun(engagementId, r, playbookId);
-            out(result);
+            if (flags.custom) {
+                const pb = await loadCustomPlaybook(flags.custom as string);
+                const runs = await runSteps(pb.steps, target, eng);
+                if (engagementId) for (const r of runs) await persistRun(engagementId, r, pb.id);
+                out({ playbookId: pb.id, playbookName: pb.name, runs });
+            } else {
+                const playbookId = positional[1];
+                if (!playbookId) throw new Error('provide a built-in playbook id or --custom <id>');
+                const result = await runPlaybook(playbookId, target, eng);
+                if (engagementId) for (const r of result.runs) await persistRun(engagementId, r, playbookId);
+                out(result);
+            }
+            break;
+        }
+
+        case 'playbook:create': {
+            const name = flags.name as string;
+            if (!name) throw new Error('--name is required');
+            const pb = await prisma.customPlaybook.create({
+                data: {
+                    name,
+                    description: (flags.description as string) || null,
+                    threat: (flags.threat as string) || null,
+                    attckTactics: (flags.tactics as string) || null,
+                },
+            });
+            out(pb);
+            break;
+        }
+
+        case 'playbook:step': {
+            const playbookId = flags.playbook as string;
+            const scenarioId = flags.scenario as string;
+            if (!playbookId || !scenarioId) throw new Error('usage: playbook:step --playbook <id> --scenario <scenarioId> [--params <json>] [--order <n>]');
+            if (flags.params) JSON.parse(flags.params as string); // validate
+            const step = await prisma.playbookStep.create({
+                data: {
+                    playbookId,
+                    scenarioId,
+                    order: flags.order ? Number(flags.order) : 0,
+                    params: (flags.params as string) || null,
+                },
+            });
+            out(step);
+            break;
+        }
+
+        case 'playbook:list': {
+            const pbs = await prisma.customPlaybook.findMany({
+                orderBy: { createdAt: 'desc' },
+                include: { steps: { orderBy: { order: 'asc' } } },
+            });
+            out(pbs);
             break;
         }
 
@@ -264,8 +314,12 @@ async function main() {
                     'engagement:verify --engagement <id>',
                     'engagement:authorize --engagement <id> --by <name>',
                     'engagement:show --engagement <id>',
-                    'run <scenarioId> --target <t> --engagement <id> [--mode ACTIVE]',
+                    'run <scenarioId> --target <t> --engagement <id> [--mode ACTIVE] [--params <json>]',
                     'playbook <playbookId> --target <t> --engagement <id> [--mode ACTIVE]',
+                    'playbook --custom <id> --target <t> --engagement <id>',
+                    'playbook:create --name X [--threat T] [--description Y] [--tactics "a,b"]',
+                    'playbook:step --playbook <id> --scenario <scenarioId> [--params <json>] [--order <n>]',
+                    'playbook:list',
                     'report --engagement <id> [--md]',
                     'scaffold "<threat description>" [--write lib/engine/scenarios/foo.ts]',
                 ],

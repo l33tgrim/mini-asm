@@ -63,3 +63,29 @@ export function webTargetsFrom(services: ServiceRef[]): WebTarget[] {
     }
     return out;
 }
+
+// Typed parameter readers: scenarios pull config from ctx.params with a default.
+export function paramString(ctx: RunContext, key: string, def = ''): string {
+    const v = ctx.params[key];
+    return typeof v === 'string' ? v : def;
+}
+
+export function paramList(ctx: RunContext, key: string, def: string[] = []): string[] {
+    const v = ctx.params[key];
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === 'string') return v.split(',').map((s) => s.trim()).filter(Boolean);
+    return def;
+}
+
+export function paramJson<T>(ctx: RunContext, key: string, def: T): T {
+    const v = ctx.params[key];
+    if (v === undefined || v === null) return def;
+    if (typeof v === 'string') {
+        try {
+            return JSON.parse(v) as T;
+        } catch {
+            return def;
+        }
+    }
+    return v as T;
+}

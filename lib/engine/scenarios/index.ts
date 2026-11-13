@@ -9,6 +9,7 @@ import { wafDetectBypass } from './waf-detect-bypass';
 import { proofOfReach } from './proof-of-reach';
 import { proofOfCommand } from './proof-of-command';
 import { proofOfData } from './proof-of-data';
+import { customHttpChecks } from './custom-http-checks';
 
 /**
  * The scenario catalog. To add a scenario, create a file in this directory that
@@ -26,4 +27,5 @@ export const ALL_SCENARIOS: Scenario[] = [
     proofOfReach,
     proofOfCommand,
     proofOfData,
+    customHttpChecks,
 ];

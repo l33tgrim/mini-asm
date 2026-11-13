@@ -14,6 +14,7 @@ interface Run { id: string; scenarioName: string; target: string; status: string
 interface Audit { id: string; action: string; target?: string; detail?: string; actor: string; createdAt: string; }
 interface Engagement { id: string; name: string; status: string; mode: string; authorizedBy?: string; scope: ScopeEntry[]; runs: Run[]; auditLogs: Audit[]; }
 interface Catalog { scenarios: { id: string; name: string; requiresActive: boolean }[]; playbooks: { id: string; name: string }[]; }
+interface CustomPB { id: string; name: string; }
 
 const sevColor: Record<string, string> = {
     CRITICAL: 'text-red-400 bg-red-500/10 border-red-500/30',
@@ -30,6 +31,7 @@ export default function EngagementDetail() {
     const { id } = useParams<{ id: string }>();
     const [eng, setEng] = useState<Engagement | null>(null);
     const [catalog, setCatalog] = useState<Catalog | null>(null);
+    const [customPlaybooks, setCustomPlaybooks] = useState<CustomPB[]>([]);
     const [scopeInput, setScopeInput] = useState('');
     const [selection, setSelection] = useState('');
     const [target, setTarget] = useState('');
@@ -40,6 +42,7 @@ export default function EngagementDetail() {
     useEffect(() => {
         load();
         axios.get('/api/scenarios').then((r) => setCatalog(r.data)).catch(() => {});
+        axios.get('/api/playbooks').then((r) => setCustomPlaybooks(r.data.custom)).catch(() => {});
     }, [load]);
 
     const addScope = async () => {
@@ -71,7 +74,9 @@ export default function EngagementDetail() {
         setBusy('run');
         try {
             const [kind, realId] = selection.split(':');
-            const body = kind === 'playbook' ? { playbookId: realId, target } : { scenarioId: realId, target };
+            const body = kind === 'playbook' ? { playbookId: realId, target }
+                : kind === 'custom' ? { customPlaybookId: realId, target }
+                    : { scenarioId: realId, target };
             await axios.post(`/api/engagements/${id}/run`, body);
             await load();
         } catch (e) {
@@ -150,6 +155,11 @@ export default function EngagementDetail() {
                                 <optgroup label="Playbooks">
                                     {catalog.playbooks.map((p) => <option key={p.id} value={`playbook:${p.id}`}>▶ {p.name}</option>)}
                                 </optgroup>
+                                {customPlaybooks.length > 0 && (
+                                    <optgroup label="Custom threat scenarios">
+                                        {customPlaybooks.map((p) => <option key={p.id} value={`custom:${p.id}`}>★ {p.name}</option>)}
+                                    </optgroup>
+                                )}
                                 <optgroup label="Scenarios">
                                     {catalog.scenarios.map((s) => <option key={s.id} value={`scenario:${s.id}`}>{s.requiresActive ? '● ' : '○ '}{s.name}</option>)}
                                 </optgroup>

@@ -69,7 +69,8 @@ export async function runScenario(
     scenarioId: string,
     target: string,
     eng: EngagementContext,
-    sharedState: Record<string, unknown> = {}
+    sharedState: Record<string, unknown> = {},
+    params: Record<string, unknown> = {}
 ): Promise<ScenarioRunOutput> {
     const scenario = getScenario(scenarioId);
     if (!scenario) {
@@ -112,6 +113,7 @@ export async function runScenario(
         mode: eng.mode,
         engagementId: eng.engagementId,
         state: sharedState,
+        params,
         log: (m) => logs.push(m),
     };
 
@@ -163,7 +165,30 @@ export async function runScenario(
     }
 }
 
-/** Run every scenario in a playbook in order, sharing recon state between them. */
+export interface PlaybookStepInput {
+    scenarioId: string;
+    params?: Record<string, unknown>;
+}
+
+/**
+ * Run an ordered list of (scenario, params) steps, sharing recon state so the
+ * footprint is gathered once. This is the common path for both built-in and
+ * user-defined custom playbooks.
+ */
+export async function runSteps(
+    steps: PlaybookStepInput[],
+    target: string,
+    eng: EngagementContext
+): Promise<ScenarioRunOutput[]> {
+    const shared: Record<string, unknown> = {};
+    const runs: ScenarioRunOutput[] = [];
+    for (const step of steps) {
+        runs.push(await runScenario(step.scenarioId, target, eng, shared, step.params || {}));
+    }
+    return runs;
+}
+
+/** Run a built-in playbook by id. */
 export async function runPlaybook(
     playbookId: string,
     target: string,
@@ -171,10 +196,6 @@ export async function runPlaybook(
 ): Promise<{ playbookId: string; playbookName: string; runs: ScenarioRunOutput[] }> {
     const pb = getPlaybook(playbookId);
     if (!pb) throw new Error(`Unknown playbook "${playbookId}"`);
-    const shared: Record<string, unknown> = {};
-    const runs: ScenarioRunOutput[] = [];
-    for (const sid of pb.scenarioIds) {
-        runs.push(await runScenario(sid, target, eng, shared));
-    }
+    const runs = await runSteps(pb.scenarioIds.map((id) => ({ scenarioId: id })), target, eng);
     return { playbookId: pb.id, playbookName: pb.name, runs };
 }
