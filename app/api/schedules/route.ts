@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Previously the Schedules page called this route and it did not exist.
-// This implements the CRUD the page expects. A separate worker (see
-// scripts/schedule-worker.ts) is what actually fires due schedules.
+// This implements the CRUD the page expects. Firing due schedules still needs
+// a worker/cron (not yet built) that reads nextRun and launches engagements.
 
 export async function GET() {
     const schedules = await prisma.schedule.findMany({ orderBy: { nextRun: 'asc' } });
