@@ -11,6 +11,8 @@ import axios from 'axios';
 
 const navItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, badge: null },
+    { name: 'Engagements', href: '/engagements', icon: Shield, badge: null },
+    { name: 'Scenarios', href: '/scenarios', icon: Zap, badge: null },
     { name: 'Scans', href: '/scans', icon: ScanSearch, badge: 'running' },
     { name: 'Findings', href: '/findings', icon: ShieldAlert, badge: 'count' },
     { name: 'Attack Surface', href: '/attack-surface', icon: Globe, badge: null },
@@ -63,7 +65,7 @@ export default function Sidebar() {
             {/* Logo */}
             <div className="p-6 border-b border-border">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-cyan-700 flex items-center justify-center shadow-lg shadow-primary/30">
                         <Shield className="text-white w-5 h-5" />
                     </div>
                     <div>

@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mini ASM
 
-## Getting Started
+Attack Surface Management plus a non-destructive Breach and Attack Simulation
+(BAS) engine, for authorized testing of your own infrastructure.
 
-First, run the development server:
+It discovers what you expose to the internet, enriches findings with known CVEs,
+measures WAF rule coverage, and proves reachability, command execution, and data
+access without breaking anything or copying data. The engine is driven from the
+web app or from a JSON-speaking CLI that an agent can orchestrate.
+
+## What it does
+
+- Asset discovery: DNS, subdomains, certificate SANs, port and service mapping.
+- Exposure checks: sensitive services and leaked files (`.git`, `.env`, actuator).
+- Posture: TLS/certificate health, HTTP security headers, SPF/DMARC.
+- Vulnerabilities: service/version to CVE mapping with a CISA KEV flag.
+- WAF: fingerprint, benign-canary rule coverage, origin-exposure detection.
+- Proofs (non-destructive): reach, read-only command, metadata-only data read.
+- Threat-led playbooks that chain scenarios into an adversary narrative.
+
+Everything active is gated. See [docs/SAFETY.md](docs/SAFETY.md).
+
+## Authorization first
+
+Nothing active runs without an authorized engagement and ownership-verified
+scope. You prove you control a domain with a DNS TXT record or a well-known file;
+IP ranges are attested by an operator. See the safety doc for details.
+
+## Quickstart (web)
 
 ```bash
+npm install
+npx prisma migrate deploy   # or: npx prisma migrate dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000, go to Engagements, create one, add scope, verify
+ownership, authorize, then run a scenario or playbook.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quickstart (CLI, agent-drivable)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run miniasm -- scenarios
+npm run miniasm -- engagement:create --name "PayInc perimeter" --mode ACTIVE
+npm run miniasm -- engagement:scope --engagement <id> --add payinc.com --add 203.0.113.0/24
+# publish the printed token, then:
+npm run miniasm -- engagement:verify --engagement <id>
+npm run miniasm -- engagement:authorize --engagement <id> --by "you@payinc"
+npm run miniasm -- playbook external-footprint --target payinc.com --engagement <id>
+npm run miniasm -- report --engagement <id> --md
+```
 
-## Learn More
+Every command emits JSON (except `report --md`), so an agent can run the whole
+engagement and read the results back.
 
-To learn more about Next.js, take a look at the following resources:
+## AI
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The scenario generator drafts new scenarios. Set `ANTHROPIC_API_KEY` to use
+Claude (Fable 5.2, override with `MINIASM_MODEL`); without a key it produces a
+local template. Generated scenarios are proposals: a human or the agent
+implements and reviews the logic before it runs. The agent can also drive the
+CLI directly with no key wired in.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Extending it
 
-## Deploy on Vercel
+Add scenarios and playbooks per [docs/SCENARIOS.md](docs/SCENARIOS.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tests
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm test
+```
+
+Covers the safety gates: scope matching, the authorization and verification
+requirements for active scenarios, and the command allowlist.
+
+## Stop everything
+
+Set `MINIASM_KILL=1` or create a `.miniasm-stop` file at the project root to halt
+all active actions immediately.

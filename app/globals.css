@@ -10,8 +10,11 @@
   --color-popover: hsl(240 10% 4%);
   --color-popover-foreground: hsl(0 0% 98%);
 
-  --color-primary: hsl(263.4 70% 50.4%);
+  /* PayInc-style: restrained steel blue, no vibrant purple. */
+  --color-primary: hsl(211 64% 46%);
   --color-primary-foreground: hsl(210 40% 98%);
+
+  --color-accent-brand: hsl(189 58% 40%);
 
   --color-secondary: hsl(240 3.7% 15.9%);
   --color-secondary-foreground: hsl(0 0% 98%);
@@ -52,7 +55,7 @@
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #3b7fc4 0%, #2a9089 100%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

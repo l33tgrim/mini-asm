@@ -56,5 +56,99 @@ model Schedule {
   frequency String   // DAILY, WEEKLY
   nextRun   DateTime
   active    Boolean  @default(true)
+  lastRun   DateTime?
   createdAt DateTime @default(now())
+}
+
+// ============================================================
+// Breach & Attack Simulation (BAS) engine
+// ============================================================
+
+// An authorized testing engagement. Nothing active runs without one.
+model Engagement {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  // DRAFT -> AUTHORIZED -> ACTIVE -> COMPLETED | REVOKED
+  status       String   @default("DRAFT")
+  // SAFE = non-destructive validation only.
+  // ACTIVE = still non-destructive, but runs reach/command/data proofs. Gated.
+  mode         String   @default("SAFE")
+  authorizedBy String?
+  authorizedAt DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  scope     ScopeEntry[]
+  runs      ScenarioRun[]
+  auditLogs AuditLog[]
+}
+
+// A single asset in an engagement's scope. Must be ownership-verified
+// before any active scenario may touch it.
+model ScopeEntry {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  value        String // domain, ip, or cidr
+  kind         String // DOMAIN, IP, CIDR
+  verified     Boolean    @default(false)
+  verifyToken  String?
+  verifyMethod String? // DNS_TXT, WELL_KNOWN
+  verifiedAt   DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@unique([engagementId, value])
+}
+
+// One execution of a scenario (or playbook step) against a target.
+model ScenarioRun {
+  id           String     @id @default(cuid())
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  scenarioId   String
+  scenarioName String
+  playbookId   String?
+  target       String
+  mode         String     @default("SAFE")
+  // PENDING, RUNNING, COMPLETED, FAILED, BLOCKED
+  status       String     @default("PENDING")
+  summary      String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+
+  results ScenarioResult[]
+}
+
+// A single finding / proof produced by a scenario run.
+model ScenarioResult {
+  id             String      @id @default(cuid())
+  runId          String
+  run            ScenarioRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  title          String
+  // INFO, LOW, MEDIUM, HIGH, CRITICAL
+  severity       String      @default("INFO")
+  // SECURE (control held), VULNERABLE, PROVEN (proof obtained), INFO, ERROR
+  outcome        String      @default("INFO")
+  attckTactic    String?
+  attckTechnique String?
+  target         String?
+  // Non-destructive evidence: request/response snippet, command output, counts.
+  evidence       String?
+  remediation    String?
+  createdAt      DateTime    @default(now())
+}
+
+// Append-only audit trail. Every gate decision and active action lands here.
+model AuditLog {
+  id           String      @id @default(cuid())
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  action       String
+  target       String?
+  detail       String?
+  actor        String      @default("system")
+  createdAt    DateTime    @default(now())
 }
