@@ -15,12 +15,12 @@ interface CustomPlaybook { id: string; name: string; description?: string; threa
 interface Cmd { key: string; command: string; purpose: string; }
 
 const catColor: Record<string, string> = {
-    RECON: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
-    EXPOSURE: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    VULN: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-    WAF: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-    PROOF: 'text-red-400 bg-red-500/10 border-red-500/20',
-    POSTURE: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    RECON: 'text-[#007AFF] bg-[#007AFF]/10 border-[#007AFF]/20',
+    EXPOSURE: 'text-[#FFE000] bg-[#FFE000]/10 border-[#FFE000]/20',
+    VULN: 'text-[#FFA200] bg-[#FFA200]/10 border-[#FFA200]/20',
+    WAF: 'text-[#007AFF] bg-[#007AFF]/10 border-[#007AFF]/20',
+    PROOF: 'text-[#FFA200] bg-[#FFA200]/10 border-[#FFA200]/20',
+    POSTURE: 'text-[#19DBBF] bg-[#19DBBF]/10 border-[#19DBBF]/20',
 };
 
 interface Picked { checked: boolean; params: string; }
@@ -96,8 +96,8 @@ export default function ScenariosPage() {
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <span className="text-sm font-semibold">{s.name}</span>
                                             <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${catColor[s.category] || ''}`}>{s.category}</span>
-                                            {s.requiresActive && <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">active</span>}
-                                            {s.params && s.params.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold">parameterized</span>}
+                                            {s.requiresActive && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#FFA200]/10 text-[#FFA200] border border-[#FFA200]/20 font-bold">active</span>}
+                                            {s.params && s.params.length > 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#007AFF]/10 text-[#007AFF] border border-[#007AFF]/20 font-bold">parameterized</span>}
                                         </div>
                                         <p className="text-[11px] text-muted-foreground mt-1">{s.description}</p>
                                     </div>
@@ -129,9 +129,9 @@ export default function ScenariosPage() {
                             <div key={p.id} className="p-5 rounded-2xl bg-card border border-border">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-bold">{p.name}</h3>
-                                    <button onClick={() => del(p.id)} className="text-muted-foreground hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    <button onClick={() => del(p.id)} className="text-muted-foreground hover:text-[#FFA200]"><Trash2 className="w-3.5 h-3.5" /></button>
                                 </div>
-                                {p.threat && <p className="text-[11px] mt-1 text-amber-400/90 flex items-center gap-1.5"><Target className="w-3 h-3" /> {p.threat}</p>}
+                                {p.threat && <p className="text-[11px] mt-1 text-[#FFE000]/90 flex items-center gap-1.5"><Target className="w-3 h-3" /> {p.threat}</p>}
                                 <div className="flex flex-wrap gap-1.5 mt-3">
                                     {p.steps.map((s) => <span key={s.scenarioId} className="text-[9px] px-2 py-0.5 rounded bg-muted font-mono">{s.params ? '⚙ ' : ''}{s.scenarioId}</span>)}
                                 </div>
@@ -153,7 +153,7 @@ export default function ScenariosPage() {
                                 <span className="text-[10px] font-mono text-muted-foreground">{p.scenarioIds.length} steps</span>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">{p.description}</p>
-                            <p className="text-[11px] mt-3 text-amber-400/90 flex items-center gap-1.5"><Target className="w-3 h-3" /> Emulates: {p.threat}</p>
+                            <p className="text-[11px] mt-3 text-[#FFE000]/90 flex items-center gap-1.5"><Target className="w-3 h-3" /> Emulates: {p.threat}</p>
                         </div>
                     ))}
                 </div>
@@ -172,8 +172,8 @@ export default function ScenariosPage() {
                             <p className="text-xs text-muted-foreground mt-2">{s.description}</p>
                             <div className="flex items-center gap-2 mt-3 flex-wrap text-[10px]">
                                 {s.requiresActive
-                                    ? <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Active + verified</span>
-                                    : <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">Safe</span>}
+                                    ? <span className="px-2 py-0.5 rounded bg-[#FFA200]/10 text-[#FFA200] border border-[#FFA200]/20 font-bold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Active + verified</span>
+                                    : <span className="px-2 py-0.5 rounded bg-[#19DBBF]/10 text-[#19DBBF] border border-[#19DBBF]/20 font-bold">Safe</span>}
                                 {s.attckTechnique && <span className="font-mono text-muted-foreground">{s.attckTechnique}</span>}
                             </div>
                         </div>
@@ -187,7 +187,7 @@ export default function ScenariosPage() {
                 <div className="rounded-2xl bg-card border border-border divide-y divide-border">
                     {commands.map((c) => (
                         <div key={c.key} className="flex items-center justify-between p-3 text-sm">
-                            <code className="font-mono text-emerald-400">{c.command}</code>
+                            <code className="font-mono text-[#19DBBF]">{c.command}</code>
                             <span className="text-xs text-muted-foreground">{c.purpose}</span>
                         </div>
                     ))}

@@ -13,10 +13,10 @@ interface Engagement {
 
 const statusStyle: Record<string, string> = {
     DRAFT: 'text-muted-foreground bg-muted',
-    AUTHORIZED: 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20',
-    ACTIVE: 'text-sky-400 bg-sky-500/10 border border-sky-500/20',
+    AUTHORIZED: 'text-[#19DBBF] bg-[#19DBBF]/10 border border-[#19DBBF]/20',
+    ACTIVE: 'text-[#007AFF] bg-[#007AFF]/10 border border-[#007AFF]/20',
     COMPLETED: 'text-primary bg-primary/10 border border-primary/20',
-    REVOKED: 'text-red-400 bg-red-500/10 border border-red-500/20',
+    REVOKED: 'text-[#FFA200] bg-[#FFA200]/10 border border-[#FFA200]/20',
 };
 
 export default function EngagementsPage() {
@@ -79,7 +79,7 @@ export default function EngagementsPage() {
                                         <span>{e.scope.length} scope entries</span>
                                         <span className="flex items-center gap-1">
                                             {verified === e.scope.length && e.scope.length > 0
-                                                ? <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                                ? <CheckCircle2 className="w-3 h-3 text-[#19DBBF]" />
                                                 : <CircleDashed className="w-3 h-3" />}
                                             {verified}/{e.scope.length} verified
                                         </span>

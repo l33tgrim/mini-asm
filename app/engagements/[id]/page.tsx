@@ -17,14 +17,14 @@ interface Catalog { scenarios: { id: string; name: string; requiresActive: boole
 interface CustomPB { id: string; name: string; }
 
 const sevColor: Record<string, string> = {
-    CRITICAL: 'text-red-400 bg-red-500/10 border-red-500/30',
-    HIGH: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
-    MEDIUM: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-    LOW: 'text-sky-400 bg-sky-500/10 border-sky-500/30',
+    CRITICAL: 'text-[#FFA200] bg-[#FFA200]/10 border-[#FFA200]/30',
+    HIGH: 'text-[#FFE000] bg-[#FFE000]/10 border-[#FFE000]/25',
+    MEDIUM: 'text-[#409BFF] bg-[#409BFF]/10 border-[#409BFF]/25',
+    LOW: 'text-[#80BDFF] bg-[#80BDFF]/10 border-[#80BDFF]/25',
     INFO: 'text-muted-foreground bg-muted border-border',
 };
 const outcomeColor: Record<string, string> = {
-    PROVEN: 'text-red-400', VULNERABLE: 'text-orange-400', SECURE: 'text-emerald-400', INFO: 'text-muted-foreground', ERROR: 'text-red-400',
+    PROVEN: 'text-[#FFA200]', VULNERABLE: 'text-[#FFE000]', SECURE: 'text-[#19DBBF]', INFO: 'text-muted-foreground', ERROR: 'text-[#FFA200]',
 };
 
 export default function EngagementDetail() {
@@ -114,8 +114,8 @@ export default function EngagementDetail() {
                     </div>
                 </div>
                 {authorized
-                    ? <button onClick={revoke} className="text-sm font-bold px-4 py-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-2"><Lock className="w-4 h-4" /> Revoke</button>
-                    : <button onClick={() => authorize(false)} disabled={busy === 'auth'} className="text-sm font-bold px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-2 disabled:opacity-50"><Unlock className="w-4 h-4" /> Authorize</button>}
+                    ? <button onClick={revoke} className="text-sm font-bold px-4 py-2 rounded-xl bg-[#FFA200]/10 text-[#FFA200] border border-[#FFA200]/25 flex items-center gap-2"><Lock className="w-4 h-4" /> Revoke</button>
+                    : <button onClick={() => authorize(false)} disabled={busy === 'auth'} className="text-sm font-bold px-4 py-2 rounded-xl bg-[#19DBBF]/10 text-[#19DBBF] border border-[#19DBBF]/25 flex items-center gap-2 disabled:opacity-50"><Unlock className="w-4 h-4" /> Authorize</button>}
             </div>
 
             {/* Scope */}
@@ -136,12 +136,12 @@ export default function EngagementDetail() {
                         <div key={s.id} className="p-3 rounded-xl bg-background border border-border">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    {s.verified ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
+                                    {s.verified ? <CheckCircle2 className="w-4 h-4 text-[#19DBBF]" /> : <CircleDashed className="w-4 h-4 text-muted-foreground" />}
                                     <code className="text-sm font-mono">{s.value}</code>
                                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted font-bold">{s.kind}</span>
-                                    {s.verified && <span className="text-[9px] text-emerald-400">{s.verifyMethod}</span>}
+                                    {s.verified && <span className="text-[9px] text-[#19DBBF]">{s.verifyMethod}</span>}
                                 </div>
-                                <button onClick={() => removeScope(s.id)} className="text-muted-foreground hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => removeScope(s.id)} className="text-muted-foreground hover:text-[#FFA200]"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                             {!s.verified && s.kind === 'DOMAIN' && s.verifyToken && (
                                 <div className="mt-2 text-[11px] text-muted-foreground bg-muted/40 rounded-lg p-2 font-mono break-all">
@@ -185,7 +185,7 @@ export default function EngagementDetail() {
                         <Play className="w-4 h-4" /> {busy === 'run' ? 'Running…' : 'Run'}
                     </button>
                     <button onClick={autorun} disabled={busy === 'ai'} title="Autonomous: recon, adaptive scenario plan, scoring, narrative"
-                        className="brand-gradient text-white rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+                        className="bg-primary text-white pill px-4 py-2 text-sm font-bold flex items-center gap-2 disabled:opacity-50">
                         <Sparkles className="w-4 h-4" /> {busy === 'ai' ? 'Assessing…' : 'AI assessment'}
                     </button>
                 </div>
@@ -198,7 +198,7 @@ export default function EngagementDetail() {
                         <h2 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2"><Sparkles className="w-4 h-4" /> AI Assessment</h2>
                         <div className="flex items-center gap-3">
                             <span className="text-[10px] text-muted-foreground">planned by {ai.plannedBy}</span>
-                            <span className={`text-lg font-black ${['A', 'B'].includes(ai.risk.grade) ? 'text-emerald-400' : ai.risk.grade === 'C' ? 'text-amber-400' : 'text-red-400'}`}>{ai.risk.grade} · {ai.risk.score}/100</span>
+                            <span className={`text-lg font-black ${['A', 'B'].includes(ai.risk.grade) ? 'text-[#19DBBF]' : ai.risk.grade === 'C' ? 'text-[#FFE000]' : 'text-[#FFA200]'}`}>{ai.risk.grade} · {ai.risk.score}/100</span>
                         </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{ai.risk.headline}</p>
@@ -214,7 +214,7 @@ export default function EngagementDetail() {
                         <div key={r.id} className="p-4 rounded-2xl bg-card border border-border">
                             <div className="flex items-center justify-between">
                                 <h3 className="font-bold text-sm">{r.scenarioName} <span className="text-muted-foreground font-normal">→ {r.target}</span></h3>
-                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${r.status === 'BLOCKED' ? 'bg-red-500/10 text-red-400' : r.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted'}`}>{r.status}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${r.status === 'BLOCKED' ? 'bg-[#FFA200]/10 text-[#FFA200]' : r.status === 'COMPLETED' ? 'bg-[#19DBBF]/10 text-[#19DBBF]' : 'bg-muted'}`}>{r.status}</span>
                             </div>
                             {r.summary && <p className="text-xs text-muted-foreground mt-1">{r.summary}</p>}
                             <div className="mt-3 space-y-2">
@@ -226,7 +226,7 @@ export default function EngagementDetail() {
                                         </div>
                                         {f.attckTechnique && <p className="text-[10px] font-mono text-muted-foreground mt-1">{f.attckTactic} / {f.attckTechnique}</p>}
                                         {f.evidence && <pre className="text-[11px] mt-2 whitespace-pre-wrap text-foreground/80 font-mono bg-background/50 rounded p-2 overflow-x-auto">{f.evidence}</pre>}
-                                        {f.remediation && <p className="text-[11px] mt-2 text-emerald-400/90">Fix: {f.remediation}</p>}
+                                        {f.remediation && <p className="text-[11px] mt-2 text-[#19DBBF]/90">Fix: {f.remediation}</p>}
                                     </div>
                                 ))}
                             </div>
@@ -243,7 +243,7 @@ export default function EngagementDetail() {
                     {eng.auditLogs.map((a) => (
                         <div key={a.id} className="p-2.5 text-[11px] font-mono flex items-center gap-3">
                             <span className="text-muted-foreground shrink-0">{new Date(a.createdAt).toLocaleTimeString()}</span>
-                            <span className={`font-bold ${a.action.includes('BLOCKED') || a.action.includes('FAILED') ? 'text-red-400' : a.action.includes('AUTHORIZED') || a.action.includes('VERIFIED') ? 'text-emerald-400' : 'text-sky-400'}`}>{a.action}</span>
+                            <span className={`font-bold ${a.action.includes('BLOCKED') || a.action.includes('FAILED') ? 'text-[#FFA200]' : a.action.includes('AUTHORIZED') || a.action.includes('VERIFIED') ? 'text-[#19DBBF]' : 'text-[#007AFF]'}`}>{a.action}</span>
                             <span className="text-muted-foreground truncate">{a.target} {a.detail}</span>
                         </div>
                     ))}

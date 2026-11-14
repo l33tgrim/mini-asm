@@ -15,12 +15,14 @@ interface Dash {
     recent: { id: string; engagementId: string; engagement?: string; scenario: string; target: string; status: string; results: number; createdAt: string }[];
 }
 
-const gradeColor: Record<string, string> = { A: 'text-emerald-400', B: 'text-teal-400', C: 'text-amber-400', D: 'text-orange-400', F: 'text-red-400' };
+const gradeColor: Record<string, string> = { A: 'text-[#19DBBF]', B: 'text-[#007AFF]', C: 'text-[#FFE000]', D: 'text-[#FFA200]', F: 'text-[#FFA200]' };
+// PayInc has no red (brand rule). Severity uses a brand-safe ramp:
+// Data Orange -> Yellow -> Data Blue 3 -> Data Blue 4.
 const sev = [
-    { key: 'CRITICAL', label: 'Critical', cls: 'text-red-400 border-red-500/30 bg-red-500/5' },
-    { key: 'HIGH', label: 'High', cls: 'text-orange-400 border-orange-500/30 bg-orange-500/5' },
-    { key: 'MEDIUM', label: 'Medium', cls: 'text-amber-400 border-amber-500/30 bg-amber-500/5' },
-    { key: 'LOW', label: 'Low', cls: 'text-sky-400 border-sky-500/30 bg-sky-500/5' },
+    { key: 'CRITICAL', label: 'Critical', cls: 'text-[#FFA200] border-[#FFA200]/30 bg-[#FFA200]/5' },
+    { key: 'HIGH', label: 'High', cls: 'text-[#FFE000] border-[#FFE000]/30 bg-[#FFE000]/5' },
+    { key: 'MEDIUM', label: 'Medium', cls: 'text-[#409BFF] border-[#409BFF]/30 bg-[#409BFF]/5' },
+    { key: 'LOW', label: 'Low', cls: 'text-[#80BDFF] border-[#80BDFF]/30 bg-[#80BDFF]/5' },
 ] as const;
 
 export default function Dashboard() {
@@ -37,7 +39,7 @@ export default function Dashboard() {
                     <h1 className="text-2xl font-black tracking-tight">Security Validation</h1>
                     <p className="text-sm text-muted-foreground mt-1">Continuous breach & attack simulation across PayInc assets. Authorized testing only.</p>
                 </div>
-                <Link href="/engagements" className="brand-gradient text-white rounded-xl px-4 py-2 text-sm font-bold flex items-center gap-2">
+                <Link href="/engagements" className="bg-primary text-primary-foreground pill px-5 py-2 text-sm font-semibold flex items-center gap-2">
                     New engagement <ArrowRight className="w-4 h-4" />
                 </Link>
             </div>
@@ -48,9 +50,8 @@ export default function Dashboard() {
                     <div className="relative w-24 h-24 shrink-0">
                         <svg viewBox="0 0 100 100" className="w-24 h-24 -rotate-90">
                             <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-muted" />
-                            <circle cx="50" cy="50" r="42" fill="none" stroke="url(#g)" strokeWidth="8" strokeLinecap="round"
+                            <circle cx="50" cy="50" r="42" fill="none" stroke="#007AFF" strokeWidth="8" strokeLinecap="round"
                                 strokeDasharray={`${(ring / 100) * 264} 264`} />
-                            <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="hsl(214 84% 54%)" /><stop offset="1" stopColor="hsl(172 66% 42%)" /></linearGradient></defs>
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
                             <span className={`text-2xl font-black ${gradeColor[d.posture.grade]}`}>{d.posture.grade}</span>
@@ -86,12 +87,12 @@ export default function Dashboard() {
                     <span className="text-sm font-black">{d.attack.coveragePct}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden mb-3">
-                    <div className="h-full brand-gradient" style={{ width: `${d.attack.coveragePct}%` }} />
+                    <div className="h-full bg-primary" style={{ width: `${d.attack.coveragePct}%` }} />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                     {d.attack.catalog.map((t) => {
                         const tested = d.attack.tested.includes(t);
-                        return <span key={t} className={`text-[10px] px-2 py-0.5 rounded border font-bold ${tested ? 'text-teal-400 border-teal-500/30 bg-teal-500/5' : 'text-muted-foreground border-border bg-muted/40'}`}>{t}</span>;
+                        return <span key={t} className={`text-[10px] px-2 py-0.5 pill border font-semibold ${tested ? 'text-[#19DBBF] border-[#19DBBF]/30 bg-[#19DBBF]/5' : 'text-muted-foreground border-border bg-muted/40'}`}>{t}</span>;
                     })}
                 </div>
             </div>
@@ -106,7 +107,7 @@ export default function Dashboard() {
                                 <p className="text-sm font-semibold truncate">{r.scenario} <span className="text-muted-foreground font-normal">→ {r.target}</span></p>
                                 <p className="text-[11px] text-muted-foreground truncate">{r.engagement} · {r.results} result(s)</p>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold shrink-0 ${r.status === 'BLOCKED' ? 'bg-red-500/10 text-red-400' : r.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted'}`}>{r.status}</span>
+                            <span className={`text-[10px] px-2 py-0.5 pill font-semibold shrink-0 ${r.status === 'BLOCKED' ? 'bg-[#FFA200]/10 text-[#FFA200]' : r.status === 'COMPLETED' ? 'bg-[#19DBBF]/10 text-[#19DBBF]' : 'bg-muted'}`}>{r.status}</span>
                         </Link>
                     ))}
                     {d.recent.length === 0 && (

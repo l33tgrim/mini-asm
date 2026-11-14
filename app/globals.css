@@ -1,50 +1,49 @@
 @import "tailwindcss";
 
 /*
- * PayInc brand theme.
- * All brand colors are tokens here. To drop in the exact PayInc palette,
- * change the --brand-* values below; everything else derives from them.
+ * PayInc corporate identity (Master Brand Manual, Oct 2025).
+ * Dark Blue #1D1A60 is a valid PayInc ground; Light Blue #007AFF is the accent
+ * (and the logo dot); Yellow #FFE000 is a single highlight. Poppins throughout.
+ * No gradients, no purple, no neon.
  */
 @theme {
-  /* Brand tokens (PayInc) */
-  --brand-ink: hsl(222 48% 5%);        /* deep navy base */
-  --brand-blue: hsl(214 84% 54%);      /* PayInc primary blue */
-  --brand-blue-deep: hsl(218 70% 34%);
-  --brand-teal: hsl(172 66% 42%);      /* secure / accent */
+  --color-payinc-dark: #1D1A60;
+  --color-payinc-blue: #007AFF;
+  --color-payinc-yellow: #FFE000;
+  --color-payinc-mint: #19DBBF;
+  --color-payinc-orange: #FFA200;
 
-  --color-background: hsl(222 48% 5%);
-  --color-foreground: hsl(210 40% 98%);
+  --color-background: #15123f;        /* deep PayInc blue ground */
+  --color-foreground: #ffffff;
 
-  --color-card: hsl(221 40% 8%);
-  --color-card-foreground: hsl(0 0% 98%);
+  --color-card: #1d1a60;              /* PayInc Dark Blue panels */
+  --color-card-foreground: #ffffff;
 
-  --color-popover: hsl(222 48% 5%);
-  --color-popover-foreground: hsl(0 0% 98%);
+  --color-popover: #1d1a60;
+  --color-popover-foreground: #ffffff;
 
-  --color-primary: hsl(214 84% 54%);
-  --color-primary-foreground: hsl(210 40% 98%);
+  --color-primary: #007AFF;           /* Light Blue accent on dark ground */
+  --color-primary-foreground: #ffffff;
 
-  --color-brand-teal: hsl(172 66% 42%);
+  --color-secondary: #272360;
+  --color-secondary-foreground: #ffffff;
 
-  --color-secondary: hsl(217 33% 15%);
-  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-muted: #262160;
+  --color-muted-foreground: #aab3e0;
 
-  --color-muted: hsl(217 33% 14%);
-  --color-muted-foreground: hsl(215 20% 62%);
+  --color-accent: #2a2668;
+  --color-accent-foreground: #ffffff;
 
-  --color-accent: hsl(217 33% 15%);
-  --color-accent-foreground: hsl(0 0% 98%);
+  --color-destructive: #FFA200;       /* brand-safe warning (Data Orange) */
+  --color-destructive-foreground: #15123f;
 
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: #343072;
+  --color-input: #3a3680;
+  --color-ring: #007AFF;
 
-  --color-border: hsl(217 33% 16%);
-  --color-input: hsl(217 33% 18%);
-  --color-ring: hsl(214 84% 54%);
-
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
+  --radius-xl: 0.5rem;   /* 8px small */
+  --radius-2xl: 1rem;    /* 16px cards */
+  --radius-3xl: 1rem;
 }
 
 @layer base {
@@ -54,24 +53,19 @@
 
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    letter-spacing: 0.01em;
   }
+
+  h1 { font-weight: 700; line-height: 1.1; }
+  h2 { line-height: 1.15; }
 }
 
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* Pill buttons/tags are the PayInc shape. */
+.pill { border-radius: 999px; }
 
-/* PayInc brand gradient: blue to teal, restrained. */
-.brand-gradient {
-  background: linear-gradient(135deg, hsl(214 84% 54%) 0%, hsl(172 66% 42%) 100%);
-}
-
-.gradient-text {
-  background: linear-gradient(135deg, #2f7fe0 0%, #22b8a6 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* The dot device: a Light Blue disc. */
+.payinc-dot {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--color-payinc-blue);
 }
