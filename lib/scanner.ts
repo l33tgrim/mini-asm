@@ -387,6 +387,7 @@ export interface DomainResolution {
     details: string[];
     /** IP address to the hostnames under the target domain that resolve to it. */
     hostMap: Record<string, string[]>;
+    subdomains: string[];
     subdomainCount: number;
 }
 
@@ -482,7 +483,7 @@ export async function resolveDomain(domain: string): Promise<DomainResolution> {
         }));
     }
 
-    return { ips: Object.keys(hostMap), details, hostMap, subdomainCount: subdomains.size };
+    return { ips: Object.keys(hostMap), details, hostMap, subdomains: Array.from(subdomains), subdomainCount: subdomains.size };
 }
 
 export async function reverseDns(ip: string): Promise<string[]> {

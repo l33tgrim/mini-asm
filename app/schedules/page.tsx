@@ -12,7 +12,7 @@ interface Schedule {
     target: string;
     frequency: string;
     nextRun: string;
-    lastRunAt: string | null;
+    lastRun: string | null;
     active: boolean;
 }
 
@@ -203,7 +203,7 @@ export default function SchedulesPage() {
                                         <p className="mt-0.5 text-xs text-muted-foreground">
                                             {frequencyDetail(s.frequency)}
                                             {s.active ? `. Next run: ${nextRunLabel(s.nextRun)}` : '. Paused'}
-                                            {s.lastRunAt ? `. Last run: ${formatDateTime(s.lastRunAt)}` : ''}
+                                            {s.lastRun ? `. Last run: ${formatDateTime(s.lastRun)}` : ''}
                                         </p>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">

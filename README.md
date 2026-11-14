@@ -1,9 +1,28 @@
-# Mini ASM
+# PayInc Security Validation (Mini ASM)
 
-A small attack surface management tool. Give it a domain, an IPv4 address or a CIDR range and it
-discovers hosts, probes 50 common ports, fingerprints the services it finds and records the issues.
+Attack surface management plus a non-destructive breach and attack simulation
+(BAS) engine, for authorised testing of your own infrastructure.
 
-Only scan systems you own or have written authorisation to test.
+It discovers what you expose to the internet, enriches findings with known CVEs,
+measures WAF rule coverage, and proves reachability, command execution and data
+access without breaking anything or copying data. The engine is driven from the
+web app or from a JSON-speaking CLI that an agent can orchestrate.
+
+Only test systems you own or have written authorisation to test.
+
+## What it does
+
+- Asset discovery: DNS, subdomains, certificate SANs, port and service mapping.
+- Exposure checks: sensitive services and leaked files (`.git`, `.env`, actuator).
+- Posture: TLS and certificate health, HTTP security headers, SPF and DMARC.
+- Vulnerabilities: service and version to CVE mapping with a CISA KEV flag.
+- WAF: fingerprint, benign-canary rule coverage, origin-exposure detection.
+- Proofs (non-destructive): reach, read-only command, metadata-only data read.
+- Threat-led playbooks that chain scenarios, plus your own custom ones.
+- Autonomous assessment: recon, an adaptive scenario plan, a posture score and a narrative.
+- Scheduled scans that keep the inventory current.
+
+Everything active is gated. See [docs/SAFETY.md](docs/SAFETY.md).
 
 ## Getting started
 
@@ -14,14 +33,9 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000.
+Open http://localhost:3000. For production use `npm run build` then `npm start`.
 
-For production:
-
-```bash
-npm run build
-npm start
-```
+The database file is not kept in git. It is created by `npm run db:migrate`.
 
 ## Access control
 
@@ -30,38 +44,93 @@ npm start
 | `ASM_USERNAME`, `ASM_PASSWORD` | Credentials for HTTP Basic authentication on every page and API route |
 | `ASM_AUTH_DISABLED=true` | Runs without a login. Use only on a trusted local machine |
 
-In production the app answers `503` until credentials are set or authentication is explicitly
-disabled. In development it runs open when no credentials are set. Basic authentication sends the
-password on every request, so put the app behind HTTPS when it is reachable over a network.
+In production the app answers `503` until credentials are set or authentication is
+explicitly disabled. In development it runs open when no credentials are set. Basic
+authentication sends the password on every request, so put the app behind HTTPS when
+it is reachable over a network. Cross-site write requests are always refused.
 
-## What a scan does
+## Authorisation first
 
-1. **Target validation.** Domains, IPv4 addresses and CIDR ranges of /24 or smaller are accepted.
-   Loopback, link-local and reserved addresses are refused, including when a domain resolves to them.
-2. **Domain discovery.** A, CNAME, NS, MX, SPF and DMARC records, a subdomain word list (with
-   wildcard DNS detection) and names from the TLS certificate. Name servers and mail servers are
-   only scanned when they sit under the target domain, because they usually belong to a third party.
-3. **Port probe.** TCP connect on 50 common ports per host, banner grab, HTTP header and TLS
-   certificate checks.
-4. **Findings.** One finding per IP and port, updated on every rescan.
+Nothing active runs without an authorised engagement and ownership-verified scope.
 
-Limits: 256 IPs per scan, 3 scans at a time, 30 minutes per run (a stopped scan can be resumed).
+1. Create an engagement (SAFE or ACTIVE mode) and add scope: domains, IPv4 addresses
+   or CIDR ranges of /24 or smaller. Loopback, link-local and reserved space is refused.
+2. Prove you control each domain with a DNS TXT record or a well-known file. IP ranges
+   are attested by the operator, and the attestation is recorded in the audit trail.
+3. Authorise the engagement, then run a scenario, a playbook or the autonomous assessment.
+
+An engagement's mode is a ceiling: a request can run an ACTIVE engagement in SAFE mode,
+but can never raise a SAFE engagement to ACTIVE.
+
+## CLI (agent-drivable)
+
+```bash
+npm run miniasm -- scenarios
+npm run miniasm -- engagement:create --name "PayInc perimeter" --mode ACTIVE
+npm run miniasm -- engagement:scope --engagement <id> --add payinc.com --add 203.0.113.0/24
+# publish the printed token, then:
+npm run miniasm -- engagement:verify --engagement <id>
+npm run miniasm -- engagement:authorize --engagement <id> --by "you@payinc"
+npm run miniasm -- playbook external-footprint --target payinc.com --engagement <id>
+npm run miniasm -- report --engagement <id> --md
+```
+
+Every command emits JSON (except `report --md`).
+
+## Scans and schedules
+
+A scan validates the target, discovers hosts (for domains: DNS records, a subdomain
+word list with wildcard detection, and certificate names), then probes 50 common ports
+per host with banner, HTTP header and TLS certificate checks. Name servers and mail
+servers are only scanned when they sit under the target domain, because they usually
+belong to a third party.
+
+Limits: 256 IPs per scan, 3 scans at a time, 30 minutes per run (a stopped scan can
+be resumed). Schedules run daily, weekly or monthly while the server is running.
+
+## AI
+
+Set `ANTHROPIC_API_KEY` to let Claude plan the autonomous assessment, write its
+narrative and draft new scenarios (model set by `MINIASM_MODEL`). Without a key a
+deterministic planner and a template are used. With a key, discovered service details
+and finding summaries for the target are sent to the Anthropic API. The model can only
+pick scenarios that exist, and every pick still passes the same safety gate.
 
 ## Architecture notes
 
-- Next.js App Router, Prisma, SQLite (`prisma/dev.db`).
+- Next.js App Router, Prisma, SQLite.
 - Scans and the scheduler run inside the Node server process (`lib/scan-runner.ts`,
-  `lib/scheduler.ts`, started from `instrumentation.ts`). The app therefore needs a long-running
-  server (`npm start`), not a serverless platform. Scans that were running when the server stopped
-  are marked `INTERRUPTED` on the next start and can be resumed.
+  `lib/scheduler.ts`, started from `instrumentation.ts`), so the app needs a
+  long-running server and not a serverless platform. Scans that were running when the
+  server stopped are marked `INTERRUPTED` on the next start and can be resumed.
 - `proxy.ts` handles authentication and rejects cross-site write requests.
-- The interface follows the PayInc corporate identity (Master Brand Manual, Oct 2025). Colours and type
-  live in the `@theme` block of `app/globals.css`; severity and status chips use the data palette.
+- The BAS engine lives in `lib/engine`, its gates in `lib/safety`.
+- The interface follows the PayInc corporate identity (Master Brand Manual, Oct 2025).
+  Colours and type live in the `@theme` block of `app/globals.css`; severity and status
+  chips use the data palette.
+
+## Extending it
+
+Add scenarios and playbooks per [docs/SCENARIOS.md](docs/SCENARIOS.md).
+
+## Tests
+
+```bash
+npm test
+```
+
+Covers the safety gates: scope matching, the authorisation and verification
+requirements for active scenarios, and the command allowlist.
+
+## Stop everything
+
+Set `MINIASM_KILL=1` or create a `.miniasm-stop` file at the project root to halt
+all active actions immediately.
 
 ## Known limitations
 
-- Detection is banner and header based. Treat findings as leads to verify, not confirmed
-  vulnerabilities.
+- Detection is banner and header based. Treat findings as leads to verify.
 - IPv4 only.
-- The DNS reconnaissance summary is stored once, so it always reflects the most recent domain scan.
-- One shared login. There are no user accounts or roles.
+- The DNS reconnaissance summary on the attack surface page reflects the most recent domain scan.
+- One shared login. There are no user accounts or roles, so audit entries name "web" or the CLI operator.
+- Scenario runs happen inside the request that starts them (up to five minutes).

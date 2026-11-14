@@ -30,7 +30,7 @@ async function tick() {
         // Always move the schedule on, so a failing target is retried next period instead of every minute.
         await prisma.schedule.update({
             where: { id: schedule.id },
-            data: { nextRun: nextRunAfter(schedule.frequency), ...(started ? { lastRunAt: new Date() } : {}) },
+            data: { nextRun: nextRunAfter(schedule.frequency), ...(started ? { lastRun: new Date() } : {}) },
         });
     }
 }

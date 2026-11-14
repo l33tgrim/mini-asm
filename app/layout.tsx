@@ -6,8 +6,8 @@ import Sidebar from "@/components/Sidebar";
 const poppins = Poppins({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-poppins" });
 
 export const metadata: Metadata = {
-  title: { default: "PayInc Mini ASM", template: "%s | PayInc Mini ASM" },
-  description: "Attack surface discovery and exposure management",
+  title: { default: "PayInc Security Validation", template: "%s | PayInc Security Validation" },
+  description: "Breach and attack simulation and attack surface management for PayInc",
   robots: { index: false, follow: false },
 };
 

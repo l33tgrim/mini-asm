@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe } from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe, Target, Crosshair } from 'lucide-react';
 import { PayIncLogo } from '@/components/ui';
 import axios from 'axios';
 
 const navItems = [
-    { name: 'Overview', href: '/', icon: LayoutDashboard },
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Engagements', href: '/engagements', icon: Target },
+    { name: 'Scenarios', href: '/scenarios', icon: Crosshair },
     { name: 'Scans', href: '/scans', icon: ScanSearch },
     { name: 'Findings', href: '/findings', icon: ShieldAlert },
     { name: 'Attack surface', href: '/attack-surface', icon: Globe },
@@ -55,8 +57,8 @@ export default function Sidebar() {
         <aside className="z-40 flex bg-primary text-white lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col">
             <div className="flex shrink-0 items-center px-5 py-3 lg:block lg:px-6 lg:pb-6 lg:pt-8">
                 <PayIncLogo onDark className="h-[45px] w-auto" />
-                <p className="mt-4 hidden text-base font-semibold lg:block">Mini ASM</p>
-                <p className="hidden text-sm text-white/80 lg:block">Attack surface management</p>
+                <p className="mt-4 hidden text-base font-semibold lg:block">Security Validation</p>
+                <p className="hidden text-sm text-white/80 lg:block">Attack simulation and attack surface</p>
             </div>
 
             <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto px-2 lg:flex-col lg:items-stretch lg:overflow-visible lg:px-4">
