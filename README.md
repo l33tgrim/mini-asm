@@ -12,7 +12,8 @@ Only test systems you own or have written authorisation to test.
 
 ## What it does
 
-- Asset discovery: DNS, subdomains, certificate SANs, port and service mapping.
+- Asset discovery: DNS, certificate logs, naming patterns, alias chains, address ownership, port and service mapping.
+- Change tracking between scans of the same target.
 - Exposure checks: sensitive services and leaked files (`.git`, `.env`, actuator).
 - Posture: TLS and certificate health, HTTP security headers, SPF and DMARC.
 - Vulnerabilities: service and version to CVE mapping with a CISA KEV flag.
@@ -79,11 +80,33 @@ Every command emits JSON (except `report --md`).
 
 ## Scans and schedules
 
-A scan validates the target, discovers hosts (for domains: DNS records, a subdomain
-word list with wildcard detection, and certificate names), then probes 50 common ports
-per host with banner, HTTP header and TLS certificate checks. Name servers and mail
-servers are only scanned when they sit under the target domain, because they usually
-belong to a third party.
+A scan validates the target, maps it, then probes 50 common ports per host with
+banner, HTTP header and TLS certificate checks.
+
+For a domain the mapping follows what an outside attacker would do:
+
+- DNS records: A, AAAA, NS, MX, SRV, SPF, DMARC and common DKIM selectors.
+- Certificate transparency logs (crt.sh, then Cert Spotter) for every name that has
+  ever had a public certificate.
+- The certificate each discovered host presents, for sibling names.
+- A common name list, plus names guessed from the naming pattern of what was found
+  (`pay-uat` suggests `pay-dev`, `pay-dr`; `web1` suggests `web2`). With
+  `ANTHROPIC_API_KEY` set, the model also proposes likely names and the hostnames
+  found so far are sent to the Anthropic API for that.
+- Alias chains, to show which cloud or SaaS platform sits behind each name.
+- Stale names: names on certificates that no longer resolve. These feed the
+  subdomain takeover check.
+- Third parties: SaaS products revealed by verification records, mail senders in
+  SPF, and the registry owner of each address block (rdap.org).
+- Related domains that share a certificate or infrastructure record.
+
+Only names under the target domain are scanned. Related domains, third-party hosts
+and IPv6 addresses are reported but left alone. Each outside source fails soft, so a
+scan still runs if one is unreachable. The server needs outbound HTTPS to crt.sh,
+api.certspotter.com and rdap.org for those steps.
+
+A finished scan is compared with the previous finished scan of the same target, and
+the scan page lists new and closed services and hostnames that appeared or went away.
 
 Limits: 256 IPs per scan, 3 scans at a time, 30 minutes per run (a stopped scan can
 be resumed). Schedules run daily, weekly or monthly while the server is running.

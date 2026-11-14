@@ -22,8 +22,9 @@ export const reconExposure: Scenario = {
         const results: ScenarioResult[] = [];
 
         if (classifyScope(ctx.target) === 'DOMAIN') {
-            const { ips, details, subdomains } = await resolveDomain(ctx.target);
-            ctx.state.subdomains = subdomains;
+            const { ips, details, subdomains, staleNames } = await resolveDomain(ctx.target);
+            // Stale names are included so the takeover check can test them for dangling aliases.
+            ctx.state.subdomains = [...subdomains, ...staleNames];
             results.push({
                 title: `DNS footprint for ${ctx.target}`,
                 severity: 'INFO',
@@ -31,7 +32,7 @@ export const reconExposure: Scenario = {
                 target: ctx.target,
                 attckTactic: 'Reconnaissance',
                 attckTechnique: 'T1590 Gather Victim Network Information',
-                evidence: [`Resolved ${ips.length} IPs, ${subdomains.length} subdomains`, ...details.slice(0, 40)].join('\n'),
+                evidence: [`Resolved ${ips.length} IPs, ${subdomains.length} subdomains`, ...details.slice(0, 120)].join('\n'),
             });
             if (subdomains.length > 0) {
                 results.push({

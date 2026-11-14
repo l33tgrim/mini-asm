@@ -3,6 +3,10 @@ import tls from 'tls';
 import dns from 'dns';
 import { randomBytes } from 'crypto';
 import { isScannableIp, parseTarget, MAX_IPS_PER_SCAN } from './targets';
+import {
+    aiCandidates, certificateLogNames, cnameChain, dkimSelectors, networkOwner, parseSpf, patternCandidates, pool,
+    providerFor, registrableDomain, servicesFromTxt, srvRecords,
+} from './discovery';
 
 export type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -389,53 +393,74 @@ export interface DomainResolution {
     hostMap: Record<string, string[]>;
     subdomains: string[];
     subdomainCount: number;
+    /** Names seen in certificate logs that no longer resolve. Candidates for dangling records. */
+    staleNames: string[];
+    /** Other registrable domains that share certificates or infrastructure with the target. */
+    relatedDomains: string[];
 }
 
 const resolve4 = (name: string) => dnsPromises.resolve4(name).catch(() => [] as string[]);
+const stripDot = (h: string) => h.toLowerCase().replace(/\.$/, '');
 
+/**
+ * Maps a domain the way an outside attacker would: DNS records, certificate
+ * logs, certificates presented by each host, naming patterns, alias chains and
+ * address ownership. Only names under the target domain are added to the scan.
+ * Anything else that turns up is reported as related but left alone.
+ */
 export async function resolveDomain(domain: string): Promise<DomainResolution> {
     const details: string[] = [];
     const hostMap: Record<string, string[]> = {};
     const subdomains = new Set<string>();
+    const tried = new Set<string>([domain]);
+    const related = new Set<string>();
 
     const link = (ip: string, host: string) => {
         if (!hostMap[ip]) hostMap[ip] = [];
         if (!hostMap[ip].includes(host)) hostMap[ip].push(host);
     };
     const inScope = (host: string) => host === domain || host.endsWith(`.${domain}`);
+    const noteRelated = (host: string) => {
+        const reg = registrableDomain(host);
+        if (reg && reg !== registrableDomain(domain) && !providerFor(host)) related.add(reg);
+    };
 
     const aRecords = await resolve4(domain);
     aRecords.forEach((ip) => link(ip, domain));
     if (aRecords.length > 0) details.push(`A Records: ${aRecords.join(', ')}`);
 
-    const cname = await dnsPromises.resolveCname(domain).catch(() => [] as string[]);
-    if (cname.length > 0) details.push(`CNAME Chain: ${domain} -> ${cname.join(' -> ')}`);
+    const aaaa = await dnsPromises.resolve6(domain).catch(() => [] as string[]);
+    if (aaaa.length > 0) details.push(`AAAA Records: ${aaaa.join(', ')} (IPv6 is recorded but not scanned)`);
 
     // Name servers and mail exchangers are recorded, but only scanned when they
     // sit under the target domain. They usually belong to a third-party provider
     // that the operator has no authority to probe.
-    const nsRecords = await dnsPromises.resolveNs(domain).catch(() => [] as string[]);
+    const nsRecords = (await dnsPromises.resolveNs(domain).catch(() => [] as string[])).map(stripDot);
     if (nsRecords.length > 0) details.push(`Nameservers: ${nsRecords.join(', ')}`);
 
     const mxRecords = await dnsPromises.resolveMx(domain).catch(() => [] as dns.MxRecord[]);
-    mxRecords.forEach((mx) => details.push(`MX Record: ${mx.exchange} (priority ${mx.priority})`));
-
-    const infraHosts = [...nsRecords, ...mxRecords.map((mx) => mx.exchange)]
-        .map((h) => h.toLowerCase().replace(/\.$/, ''))
-        .filter(inScope);
-    await Promise.all(infraHosts.map(async (host) => {
-        (await resolve4(host)).forEach((ip) => link(ip, host));
-    }));
-
-    const txtRecords = await dnsPromises.resolveTxt(domain).catch(() => [] as string[][]);
-    let hasSPF = false;
-    txtRecords.forEach((txt) => {
-        const record = txt.join('');
-        if (record.toLowerCase().startsWith('v=spf1')) {
-            hasSPF = true;
-            details.push(`SPF Record: ${clean(record, 100)}${record.length > 100 ? '...' : ''}`);
-        }
+    mxRecords.forEach((mx) => {
+        const provider = providerFor(mx.exchange);
+        details.push(`MX Record: ${stripDot(mx.exchange)} (priority ${mx.priority})${provider ? ` [${provider}]` : ''}`);
     });
+
+    const srv = await srvRecords(domain);
+    srv.forEach((r) => details.push(`SRV Record: ${r.name} -> ${r.target}:${r.port}`));
+
+    const infraHosts = [...nsRecords, ...mxRecords.map((mx) => stripDot(mx.exchange)), ...srv.map((r) => r.target)];
+    infraHosts.filter((h) => !inScope(h)).forEach(noteRelated);
+
+    const txtRecords = (await dnsPromises.resolveTxt(domain).catch(() => [] as string[][])).map((t) => t.join(''));
+    let hasSPF = false;
+    txtRecords.forEach((record) => {
+        if (!record.toLowerCase().startsWith('v=spf1')) return;
+        hasSPF = true;
+        details.push(`SPF Record: ${clean(record, 100)}${record.length > 100 ? '...' : ''}`);
+        const spf = parseSpf(record);
+        spf.includes.slice(0, 20).forEach((inc) => details.push(`Third-party sender: ${clean(inc, 100)}${providerFor(inc) ? ` [${providerFor(inc)}]` : ''}`));
+        spf.ranges.slice(0, 20).forEach((range) => details.push(`Declared mail range: ${clean(range, 60)}`));
+    });
+    servicesFromTxt(txtRecords).forEach((service) => details.push(`SaaS in use: ${service} (domain verification record)`));
 
     const dmarcRecords = await dnsPromises.resolveTxt(`_dmarc.${domain}`).catch(() => [] as string[][]);
     let hasDMARC = false;
@@ -448,42 +473,134 @@ export async function resolveDomain(domain: string): Promise<DomainResolution> {
     });
 
     if (mxRecords.length > 0) {
+        const selectors = await dkimSelectors(domain);
+        if (selectors.length > 0) details.push(`DKIM selectors found: ${selectors.join(', ')}`);
         if (!hasSPF) details.push('⚠️ Email Security: Missing SPF record');
         if (!hasDMARC) details.push('⚠️ Email Security: Missing DMARC record');
     }
 
-    // Wildcard DNS makes every guessed name resolve. Detect it so the word list
-    // does not report a hundred subdomains that do not really exist.
+    // Wildcard DNS makes every guessed name resolve. Detect it so guessed names
+    // are not reported as real hosts.
     const wildcardIps = new Set(await resolve4(`${randomBytes(8).toString('hex')}.${domain}`));
     if (wildcardIps.size > 0) details.push(`Wildcard DNS detected: *.${domain} -> ${Array.from(wildcardIps).join(', ')}`);
 
-    await Promise.all(COMMON_SUBDOMAINS.map(async (label) => {
-        const host = `${label}.${domain}`;
+    /**
+     * Resolves one candidate and records it if it is real. `proven` sources
+     * (certificates, DNS records) are trusted even when they resolve to the
+     * wildcard address. Guesses are not.
+     */
+    const tryHost = async (host: string, source: string, proven: boolean): Promise<boolean> => {
+        if (tried.has(host) || !inScope(host)) return false;
+        tried.add(host);
         const ips = await resolve4(host);
-        if (ips.length === 0 || ips.every((ip) => wildcardIps.has(ip))) return;
+        if (ips.length === 0) return false;
+        if (!proven && ips.every((ip) => wildcardIps.has(ip))) return false;
         subdomains.add(host);
-        details.push(`Discovered Subdomain: ${host} -> ${ips.join(', ')}`);
+        details.push(`Subdomain [${source}]: ${host} -> ${ips.join(', ')}`);
         ips.forEach((ip) => link(ip, host));
-    }));
+        return true;
+    };
 
-    if (aRecords.length > 0) {
-        const sslInfo = await extractSSLInfo(domain, 443, domain);
-        if (sslInfo.issuer) {
-            details.push(`SSL Certificate Issuer: ${sslInfo.issuer}`);
-            details.push(`SSL Certificate Expires: ${sslInfo.validTo}`);
-        }
-        sslInfo.issues.forEach((issue) => details.push(`⚠️ SSL: ${issue.text}`));
+    // Infrastructure names under the domain are part of the surface.
+    await pool(infraHosts.filter(inScope), 20, async (host) => { await tryHost(host, 'dns record', true); });
 
-        const newSans = sslInfo.sans.filter((san) => inScope(san) && san !== domain && !subdomains.has(san)).slice(0, 50);
-        await Promise.all(newSans.map(async (san) => {
-            const ips = await resolve4(san);
-            subdomains.add(san);
-            details.push(ips.length > 0 ? `SSL SAN Discovery: ${san} -> ${ips.join(', ')}` : `SSL SAN Discovery: ${san}`);
-            ips.forEach((ip) => link(ip, san));
-        }));
+    // Round 1: the common name list and the certificate logs, side by side.
+    const staleNames: string[] = [];
+    const [, ct] = await Promise.all([
+        pool(COMMON_SUBDOMAINS.map((label) => `${label}.${domain}`), 40, async (host) => { await tryHost(host, 'common name', false); }),
+        certificateLogNames(domain),
+    ]);
+    if (ct.source) {
+        details.push(`Certificate logs (${ct.source}): ${ct.names.length} names on record for ${domain}`);
+        await pool(ct.names, 40, async (host) => {
+            if (tried.has(host)) return;
+            if (!(await tryHost(host, 'certificate log', true))) staleNames.push(host);
+        });
+    } else {
+        details.push('Certificate logs: no log source could be reached, so this step was skipped');
     }
 
-    return { ips: Object.keys(hostMap), details, hostMap, subdomains: Array.from(subdomains), subdomainCount: subdomains.size };
+    // Round 2: read the certificate each host presents. The names on it reveal
+    // sibling services and other domains run by the same organisation. The model
+    // is asked for likely names at the same time, if a key is configured.
+    const harvestCertificates = async (hosts: string[]) => {
+        const fresh: string[] = [];
+        await pool(hosts.slice(0, 60), 20, async (host) => {
+            const ip = Object.keys(hostMap).find((addr) => hostMap[addr].includes(host));
+            if (!ip || !isScannableIp(ip)) return;
+            const info = await extractSSLInfo(ip, 443, host);
+            if (host === domain) {
+                if (info.issuer) {
+                    details.push(`SSL Certificate Issuer: ${info.issuer}`);
+                    details.push(`SSL Certificate Expires: ${info.validTo}`);
+                }
+                info.issues.forEach((issue) => details.push(`⚠️ SSL: ${issue.text}`));
+            }
+            for (const san of info.sans) {
+                if (!inScope(san)) noteRelated(san);
+                else if (!tried.has(san)) fresh.push(san);
+            }
+        });
+        const unique = Array.from(new Set(fresh)).slice(0, 100);
+        await pool(unique, 40, async (host) => {
+            if (!(await tryHost(host, 'host certificate', true)) && !staleNames.includes(host)) staleNames.push(host);
+        });
+    };
+
+    const firstRound = [domain, ...subdomains];
+    const [, aiNames] = await Promise.all([
+        harvestCertificates(firstRound),
+        aiCandidates(domain, Array.from(subdomains)),
+    ]);
+
+    // Round 3: names guessed from the naming pattern of what was found.
+    const beforeGuessing = new Set(subdomains);
+    await pool(patternCandidates(domain, Array.from(subdomains)), 40, async (host) => { await tryHost(host, 'naming pattern', false); });
+    if (aiNames.length > 0) {
+        let hits = 0;
+        await pool(aiNames, 40, async (host) => { if (await tryHost(host, 'AI suggestion', false)) hits++; });
+        details.push(`AI name suggestions: ${aiNames.length} tried, ${hits} resolved`);
+    }
+    const lateFinds = Array.from(subdomains).filter((h) => !beforeGuessing.has(h));
+    if (lateFinds.length > 0) await harvestCertificates(lateFinds);
+
+    if (staleNames.length > 0) {
+        details.push(`Stale names: ${staleNames.length} names from certificates no longer resolve. Check each for a leftover record that points at a retired service.`);
+        staleNames.slice(0, 40).forEach((host) => details.push(`Stale name: ${host}`));
+    }
+
+    // Alias chains show which cloud or SaaS platform sits behind each name.
+    await pool([domain, ...subdomains, ...staleNames].slice(0, 200), 30, async (host) => {
+        const chain = await cnameChain(host);
+        if (chain.length === 0) return;
+        const provider = chain.map(providerFor).find(Boolean);
+        details.push(`Alias: ${host} -> ${chain.join(' -> ')}${provider ? ` [${provider}]` : ''}`);
+        chain.filter((h) => !inScope(h)).forEach(noteRelated);
+    });
+
+    // Who each address block belongs to. A block assigned to the organisation
+    // itself is worth scanning in full. A shared cloud or CDN block is not.
+    const owners = new Map<string, string[]>();
+    await pool(Object.keys(hostMap).filter(isScannableIp).slice(0, 15), 5, async (ip) => {
+        const owner = await networkOwner(ip);
+        if (!owner) return;
+        const key = `${owner.name}${owner.range ? `, ${owner.range}` : ''}${owner.country ? `, ${owner.country}` : ''}`;
+        owners.set(key, [...(owners.get(key) || []), ip]);
+    });
+    owners.forEach((ips, owner) => details.push(`Network owner: ${ips.join(', ')} -> ${clean(owner, 160)}`));
+
+    const relatedDomains = Array.from(related).sort().slice(0, 40);
+    relatedDomains.forEach((d) => details.push(`Related domain: ${d} (shares a certificate or infrastructure record, not scanned)`));
+
+    return {
+        ips: Object.keys(hostMap),
+        details,
+        hostMap,
+        subdomains: Array.from(subdomains).sort(),
+        subdomainCount: subdomains.size,
+        staleNames,
+        relatedDomains,
+    };
 }
 
 export async function reverseDns(ip: string): Promise<string[]> {

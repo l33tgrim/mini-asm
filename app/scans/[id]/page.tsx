@@ -20,6 +20,62 @@ interface Scan {
     completedAt: string | null;
     createdAt: string;
     findings: Finding[];
+    changes: Changes | null;
+}
+
+interface ServiceRef {
+    ip: string;
+    port: number;
+    service: string | null;
+}
+
+interface Changes {
+    previousScanId: string;
+    previousDate: string;
+    newHosts: string[];
+    removedHosts: string[];
+    newServices: ServiceRef[];
+    closedServices: ServiceRef[];
+    total: number;
+}
+
+function ChangeList({ title, items, highlight }: { title: string; items: string[]; highlight?: boolean }) {
+    if (items.length === 0) return null;
+    return (
+        <div>
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className={`h-2 w-2 rounded-full ${highlight ? 'bg-sev-critical' : 'bg-sev-low'}`} aria-hidden />
+                {title} ({items.length})
+            </p>
+            <ul className="mt-2 space-y-1">
+                {items.map((item) => <li key={item} className="break-all font-mono text-xs">{item}</li>)}
+            </ul>
+        </div>
+    );
+}
+
+function ChangesPanel({ changes }: { changes: Changes }) {
+    const service = (s: ServiceRef) => `${s.ip}:${s.port}${s.service ? ` ${s.service}` : ''}`;
+    return (
+        <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold">Changes since the previous scan</h2>
+                <Link href={`/scans/${changes.previousScanId}`} className="text-xs text-muted-foreground underline decoration-secondary underline-offset-4 hover:text-foreground">
+                    Compared with {formatDateTime(changes.previousDate)}
+                </Link>
+            </div>
+            {changes.total === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">Nothing changed. The same hosts and services are exposed.</p>
+            ) : (
+                <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+                    <ChangeList title="New services" items={changes.newServices.map(service)} highlight />
+                    <ChangeList title="New hostnames" items={changes.newHosts} highlight />
+                    <ChangeList title="Closed services" items={changes.closedServices.map(service)} />
+                    <ChangeList title="Hostnames gone" items={changes.removedHosts} />
+                </div>
+            )}
+        </section>
+    );
 }
 
 const RESUMABLE = ['FAILED', 'TIMED_OUT', 'INTERRUPTED', 'PENDING'];
@@ -180,6 +236,8 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                     {STOPPED_NOTE[scan.status] && <p className="mt-3 text-sm text-muted-foreground">{STOPPED_NOTE[scan.status]}</p>}
                 </section>
             )}
+
+            {scan.changes && <ChangesPanel changes={scan.changes} />}
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
                 <aside className="h-fit rounded-2xl border border-border bg-card p-5">

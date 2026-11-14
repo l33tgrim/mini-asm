@@ -128,16 +128,15 @@ async function saveDiscoveryFinding(scanId: string, resolution: TargetResolution
     if (warnings.length > 0) severity = 'MEDIUM';
     if (warnings.some((d) => d.includes('expired'))) severity = 'HIGH';
 
+    const section = (title: string, lines: string[]) => (lines.length > 0 ? [`=== ${title} ===`, ...lines, ''] : []);
     const forensics = [
-        '=== DNS DISCOVERY ===',
-        ...pick('A Records', 'CNAME', 'Nameservers', 'MX Record', 'Wildcard DNS', 'Discovered Subdomain', 'Reverse DNS', 'Skipped'),
-        '',
-        '=== EMAIL SECURITY ===',
-        ...pick('SPF', 'DMARC', 'Email Security'),
-        '',
-        '=== TLS/SSL ANALYSIS ===',
-        ...pick('SSL'),
-    ].join('\n');
+        ...section('DNS RECORDS', pick('A Records', 'CNAME Chain', 'Nameservers', 'MX Record', 'SRV Record', 'Wildcard DNS', 'Reverse DNS', 'Skipped')),
+        ...section('SUBDOMAINS', pick('Certificate logs', 'Subdomain [', 'AI name suggestions')),
+        ...section('STALE NAMES', pick('Stale name')),
+        ...section('HOSTING AND THIRD PARTIES', pick('Alias:', 'Network owner', 'SaaS in use', 'Third-party sender', 'Declared mail range', 'Related domain')),
+        ...section('EMAIL SECURITY', pick('SPF Record', 'DMARC', 'DKIM', 'Email Security')),
+        ...section('TLS/SSL ANALYSIS', pick('SSL')),
+    ].join('\n').trim();
 
     const data = {
         service: 'DNS Discovery',
