@@ -1,37 +1,45 @@
 @import "tailwindcss";
 
+/*
+ * Brand tokens. Every colour in the app derives from this block, so the palette
+ * can be changed here without touching components.
+ */
 @theme {
-  --color-background: hsl(240 10% 4%);
-  --color-foreground: hsl(0 0% 98%);
+  --color-background: #0a1120;
+  --color-foreground: #e8edf5;
 
-  --color-card: hsl(240 10% 6%);
-  --color-card-foreground: hsl(0 0% 98%);
+  --color-card: #101a2e;
+  --color-card-foreground: #e8edf5;
 
-  --color-popover: hsl(240 10% 4%);
-  --color-popover-foreground: hsl(0 0% 98%);
+  --color-popover: #101a2e;
+  --color-popover-foreground: #e8edf5;
 
-  --color-primary: hsl(263.4 70% 50.4%);
-  --color-primary-foreground: hsl(210 40% 98%);
+  --color-primary: #2f7fd6;
+  --color-primary-foreground: #ffffff;
 
-  --color-secondary: hsl(240 3.7% 15.9%);
-  --color-secondary-foreground: hsl(0 0% 98%);
+  --color-secondary: #162238;
+  --color-secondary-foreground: #e8edf5;
 
-  --color-muted: hsl(240 3.7% 15.9%);
-  --color-muted-foreground: hsl(240 5% 64.9%);
+  --color-muted: #162238;
+  --color-muted-foreground: #8a99b4;
 
-  --color-accent: hsl(240 3.7% 15.9%);
-  --color-accent-foreground: hsl(0 0% 98%);
+  --color-accent: #1a2944;
+  --color-accent-foreground: #e8edf5;
 
-  --color-destructive: hsl(0 62.8% 30.6%);
-  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
 
-  --color-border: hsl(240 3.7% 15.9%);
-  --color-input: hsl(240 3.7% 15.9%);
-  --color-ring: hsl(240 4.9% 83.9%);
+  --color-border: #1e2b44;
+  --color-input: #1e2b44;
+  --color-ring: #2f7fd6;
 
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
-  --radius-3xl: 1.5rem;
+  /* Severity scale, shared by badges, bars and counters. */
+  --color-sev-critical: #ef4444;
+  --color-sev-high: #f97316;
+  --color-sev-medium: #eab308;
+  --color-sev-low: #38bdf8;
+  --color-sev-info: #94a3b8;
+  --color-success: #22c55e;
 }
 
 @layer base {
@@ -40,20 +48,16 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground antialiased;
   }
-}
 
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
 
-.gradient-text {
-  background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
 }

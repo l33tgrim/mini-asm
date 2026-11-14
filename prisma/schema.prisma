@@ -11,10 +11,11 @@ model Scan {
   id             String    @id @default(cuid())
   target         String
   status         String    @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED, TIMED_OUT, INTERRUPTED
-  type           String    @default("MANUAL")
+  type           String    @default("MANUAL") // MANUAL, SCHEDULED
   currentIndex   Int       @default(0)
   totalIps       Int       @default(0)
   ipList         String?   // JSON string of all IPs to scan
+  hostMap        String?   // JSON map of IP -> hostnames, kept so a resumed scan has the same context
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -53,8 +54,9 @@ model Finding {
 model Schedule {
   id        String   @id @default(cuid())
   target    String
-  frequency String   // DAILY, WEEKLY
+  frequency String   // DAILY, WEEKLY, MONTHLY
   nextRun   DateTime
+  lastRunAt DateTime?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }

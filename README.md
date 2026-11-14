@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mini ASM
 
-## Getting Started
+A small attack surface management tool. Give it a domain, an IPv4 address or a CIDR range and it
+discovers hosts, probes 50 common ports, fingerprints the services it finds and records the issues.
 
-First, run the development server:
+Only scan systems you own or have written authorisation to test.
+
+## Getting started
 
 ```bash
+npm install
+npm run db:migrate      # creates or updates prisma/dev.db
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For production:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Access control
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Purpose |
+| --- | --- |
+| `ASM_USERNAME`, `ASM_PASSWORD` | Credentials for HTTP Basic authentication on every page and API route |
+| `ASM_AUTH_DISABLED=true` | Runs without a login. Use only on a trusted local machine |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+In production the app answers `503` until credentials are set or authentication is explicitly
+disabled. In development it runs open when no credentials are set. Basic authentication sends the
+password on every request, so put the app behind HTTPS when it is reachable over a network.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## What a scan does
 
-## Deploy on Vercel
+1. **Target validation.** Domains, IPv4 addresses and CIDR ranges of /24 or smaller are accepted.
+   Loopback, link-local and reserved addresses are refused, including when a domain resolves to them.
+2. **Domain discovery.** A, CNAME, NS, MX, SPF and DMARC records, a subdomain word list (with
+   wildcard DNS detection) and names from the TLS certificate. Name servers and mail servers are
+   only scanned when they sit under the target domain, because they usually belong to a third party.
+3. **Port probe.** TCP connect on 50 common ports per host, banner grab, HTTP header and TLS
+   certificate checks.
+4. **Findings.** One finding per IP and port, updated on every rescan.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Limits: 256 IPs per scan, 3 scans at a time, 30 minutes per run (a stopped scan can be resumed).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Architecture notes
+
+- Next.js App Router, Prisma, SQLite (`prisma/dev.db`).
+- Scans and the scheduler run inside the Node server process (`lib/scan-runner.ts`,
+  `lib/scheduler.ts`, started from `instrumentation.ts`). The app therefore needs a long-running
+  server (`npm start`), not a serverless platform. Scans that were running when the server stopped
+  are marked `INTERRUPTED` on the next start and can be resumed.
+- `proxy.ts` handles authentication and rejects cross-site write requests.
+- Colours live in the `@theme` block of `app/globals.css`.
+
+## Known limitations
+
+- Detection is banner and header based. Treat findings as leads to verify, not confirmed
+  vulnerabilities.
+- IPv4 only.
+- The DNS reconnaissance summary is stored once, so it always reflects the most recent domain scan.
+- One shared login. There are no user accounts or roles.

@@ -1,35 +1,36 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { handleError } from '@/lib/api';
+
+const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const;
+
+// 0.0.0.0 holds the DNS reconnaissance summary, which is not a host finding.
+const hostFindings = { ip: { not: '0.0.0.0' } };
 
 export async function GET() {
     try {
-        const findings = await prisma.finding.groupBy({
-            by: ['severity'],
-            _count: {
-                severity: true,
-            },
+        const [bySeverity, hosts, runningScans, totalScans, latest] = await Promise.all([
+            prisma.finding.groupBy({ by: ['severity'], where: hostFindings, _count: { _all: true } }),
+            prisma.finding.findMany({ where: hostFindings, distinct: ['ip'], select: { ip: true } }),
+            prisma.scan.count({ where: { status: 'RUNNING' } }),
+            prisma.scan.count(),
+            prisma.finding.findFirst({ where: hostFindings, orderBy: { updatedAt: 'desc' }, select: { updatedAt: true } }),
+        ]);
+
+        const severity = Object.fromEntries(SEVERITIES.map((s) => [s, 0])) as Record<(typeof SEVERITIES)[number], number>;
+        for (const row of bySeverity) {
+            if (row.severity in severity) severity[row.severity as keyof typeof severity] = row._count._all;
+        }
+
+        return NextResponse.json({
+            severity,
+            totalFindings: Object.values(severity).reduce((a, b) => a + b, 0),
+            assets: hosts.length,
+            runningScans,
+            totalScans,
+            lastDiscovery: latest?.updatedAt ?? null,
         });
-
-        const severityMap: Record<string, number> = {
-            LOW: 0,
-            MEDIUM: 0,
-            HIGH: 0,
-            CRITICAL: 0,
-        };
-
-        findings.forEach((f) => {
-            severityMap[f.severity] = f._count.severity;
-        });
-
-        const stats = [
-            { name: 'Critical', value: severityMap.CRITICAL, color: '#ef4444' },
-            { name: 'High', value: severityMap.HIGH, color: '#f97316' },
-            { name: 'Medium', value: severityMap.MEDIUM, color: '#eab308' },
-            { name: 'Low', value: severityMap.LOW, color: '#3b82f6' },
-        ];
-
-        return NextResponse.json(stats);
     } catch (error) {
-        return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+        return handleError('GET /api/stats', error);
     }
 }

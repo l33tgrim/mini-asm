@@ -6,8 +6,9 @@ import Sidebar from "@/components/Sidebar";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Mini ASM | Attack Surface Management",
-  description: "Next-gen Vulnerability and Attack Surface Management Tool",
+  title: { default: "Mini ASM", template: "%s | Mini ASM" },
+  description: "Attack surface discovery and exposure management",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({
@@ -16,11 +17,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen bg-background`} suppressHydrationWarning>
+    <html lang="en">
+      <body className={`${inter.className} min-h-screen bg-background`}>
         <Sidebar />
-        <main className="pl-64 min-h-screen">
-          <div className="p-8 max-w-7xl mx-auto">
+        <main className="min-h-screen lg:pl-60">
+          <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
             {children}
           </div>
         </main>

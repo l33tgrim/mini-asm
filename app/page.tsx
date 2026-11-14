@@ -1,354 +1,170 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area, LineChart, Line
-} from 'recharts';
-import {
-  ShieldAlert, ScanSearch, Activity, Flame, ShieldCheck, Zap, Globe,
-  Server, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, TrendingUp,
-  Shield, Target, Eye, ChevronRight, Calendar, RefreshCw
-} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ScanSearch, RefreshCw, Globe, ShieldAlert, AlertTriangle, Activity, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import Link from 'next/link';
+import { ErrorBanner, IconButton, PageHeader, StatCard, StatusBadge } from '@/components/ui';
+import { SEVERITIES, apiError, formatDateTime, severityBar, severityLabel, severityText } from '@/lib/ui';
 
-interface StatEntry {
-  name: string;
-  value: number;
-  color: string;
+interface Stats {
+  severity: Record<string, number>;
+  totalFindings: number;
+  assets: number;
+  runningScans: number;
+  totalScans: number;
+  lastDiscovery: string | null;
 }
 
 interface ScanEntry {
   id: string;
   target: string;
   status: string;
-  type: string;
   createdAt: string;
+  totalIps: number;
   _count?: { findings: number };
-  totalIps?: number;
 }
 
-interface Finding {
-  ip: string;
-  severity: string;
-  service: string | null;
-  updatedAt: string;
+// Exposure score: each finding adds points by severity, capped at 100.
+const SCORE_WEIGHTS: Record<string, number> = { CRITICAL: 25, HIGH: 10, MEDIUM: 3, LOW: 1, INFO: 0 };
+
+function exposure(severity: Record<string, number>) {
+  const score = Math.min(100, SEVERITIES.reduce((sum, s) => sum + (severity[s] ?? 0) * SCORE_WEIGHTS[s], 0));
+  if (score >= 75) return { score, label: 'Critical', level: 'CRITICAL' };
+  if (score >= 50) return { score, label: 'High', level: 'HIGH' };
+  if (score >= 25) return { score, label: 'Medium', level: 'MEDIUM' };
+  return { score, label: 'Low', level: 'LOW' };
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<StatEntry[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [scans, setScans] = useState<ScanEntry[]>([]);
-  const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, scansRes, findingsRes] = await Promise.all([
-          axios.get('/api/stats'),
-          axios.get('/api/scans'),
-          axios.get('/api/findings')
-        ]);
-        setStats(statsRes.data);
-        setScans(scansRes.data);
-        setFindings(findingsRes.data);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [statsRes, scansRes] = await Promise.all([axios.get('/api/stats'), axios.get('/api/scans')]);
+      setStats(statsRes.data);
+      setScans(scansRes.data);
+      setError(null);
+    } catch (e) {
+      setError(apiError(e, 'Could not load dashboard data.'));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const totalFindings = stats.reduce((acc, curr) => acc + curr.value, 0);
-  const recentScans = scans.slice(0, 5);
-  const criticalCount = stats.find(s => s.name === 'Critical')?.value || 0;
-  const highCount = stats.find(s => s.name === 'High')?.value || 0;
-  const uniqueIps = new Set(findings.filter(f => f.ip !== '0.0.0.0').map(f => f.ip)).size;
-  const activeScans = scans.filter(s => s.status === 'RUNNING').length;
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  // Calculate risk score (0-100)
-  const riskScore = Math.min(100, Math.round(
-    (criticalCount * 25 + highCount * 15 + (stats.find(s => s.name === 'Medium')?.value || 0) * 5) / Math.max(1, totalFindings) * 10
-  ));
-
-  const getRiskLevel = (score: number) => {
-    if (score >= 70) return { label: 'Critical', color: 'text-red-500', bg: 'bg-red-500' };
-    if (score >= 50) return { label: 'High', color: 'text-orange-500', bg: 'bg-orange-500' };
-    if (score >= 30) return { label: 'Medium', color: 'text-yellow-500', bg: 'bg-yellow-500' };
-    return { label: 'Low', color: 'text-green-500', bg: 'bg-green-500' };
-  };
-
-  const riskLevel = getRiskLevel(riskScore);
-
-  // Mock trend data for sparklines
-  const trendData = [
-    { day: 'Mon', value: 12 },
-    { day: 'Tue', value: 19 },
-    { day: 'Wed', value: 15 },
-    { day: 'Thu', value: 22 },
-    { day: 'Fri', value: 18 },
-    { day: 'Sat', value: totalFindings * 0.8 },
-    { day: 'Sun', value: totalFindings },
-  ];
+  const severity = stats?.severity ?? {};
+  const total = stats?.totalFindings ?? 0;
+  const risk = exposure(severity);
+  const largest = Math.max(1, ...SEVERITIES.map((s) => severity[s] ?? 0));
+  const recentScans = scans.slice(0, 6);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Header with Risk Score */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight">Security Command Center</h1>
-          <p className="text-muted-foreground mt-1">Real-time attack surface monitoring and threat intelligence</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/scans" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-bold text-sm hover:bg-primary/90 transition-all flex items-center gap-2">
-            <ScanSearch className="w-4 h-4" />
-            New Scan
-          </Link>
-          <button className="p-2 rounded-xl border border-border hover:bg-accent transition-all">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+    <div className="space-y-6">
+      <PageHeader title="Overview" description="Current exposure across everything discovered so far">
+        <IconButton label="Refresh" onClick={fetchData} disabled={loading}>
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </IconButton>
+        <Link href="/scans" className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+          <ScanSearch className="h-4 w-4" aria-hidden />
+          New scan
+        </Link>
+      </PageHeader>
+
+      <ErrorBanner message={error} />
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Assets discovered" value={stats?.assets ?? 0} icon={Globe} />
+        <StatCard label="Total findings" value={total} icon={ShieldAlert} />
+        <StatCard label="Critical" value={severity.CRITICAL ?? 0} icon={AlertTriangle} tone={severity.CRITICAL ? 'text-sev-critical' : undefined} />
+        <StatCard label="Scans running" value={stats?.runningScans ?? 0} icon={Activity} tone={stats?.runningScans ? 'text-primary' : undefined} />
       </div>
 
-      {/* Risk Score Hero Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 bg-gradient-to-br from-card to-card/50 border border-border rounded-3xl p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-2xl" />
-          <div className="relative z-10">
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest mb-2">Overall Risk Score</p>
-            <div className="flex items-end gap-4 mb-4">
-              <span className={`text-6xl font-black ${riskLevel.color}`}>{riskScore}</span>
-              <span className="text-2xl text-muted-foreground font-bold mb-2">/100</span>
-            </div>
-            <div className="w-full h-3 bg-muted rounded-full overflow-hidden mb-3">
-              <div
-                className={`h-full ${riskLevel.bg} transition-all duration-1000`}
-                style={{ width: `${riskScore}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${riskLevel.color} ${riskLevel.bg}/10`}>
-                {riskLevel.label} Risk
-              </span>
-              <span className="text-xs text-muted-foreground">Last updated: Now</span>
-            </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-xl border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold">Exposure score</h2>
+          <div className="mt-4 flex items-baseline gap-2">
+            <span className={`text-5xl font-semibold tabular-nums ${severityText[risk.level]}`}>{risk.score}</span>
+            <span className="text-lg text-muted-foreground">/ 100</span>
           </div>
-        </div>
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Exposure score ${risk.score} out of 100`}>
+            <div className={`h-full ${severityBar[risk.level]} transition-all duration-500`} style={{ width: `${risk.score}%` }} />
+          </div>
+          <p className={`mt-3 text-sm font-medium ${severityText[risk.level]}`}>{risk.label} exposure</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            Each finding adds points by severity (critical 25, high 10, medium 3, low 1), capped at 100.
+          </p>
+          <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
+            Last discovery: {stats?.lastDiscovery ? formatDateTime(stats.lastDiscovery) : 'none yet'}
+          </p>
+        </section>
 
-        {/* Quick Stats Grid */}
-        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-blue-500/10"><Globe className="w-4 h-4 text-blue-500" /></div>
-              <TrendingUp className="w-3 h-3 text-green-500" />
-            </div>
-            <p className="text-2xl font-black">{uniqueIps}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Assets Discovered</p>
-          </div>
-          <div className="bg-card border border-red-500/20 rounded-2xl p-4 hover:border-red-500/40 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-red-500/10"><AlertTriangle className="w-4 h-4 text-red-500" /></div>
-              {criticalCount > 0 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-            </div>
-            <p className="text-2xl font-black text-red-500">{criticalCount}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Critical Issues</p>
-          </div>
-          <div className="bg-card border border-orange-500/20 rounded-2xl p-4 hover:border-orange-500/40 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-orange-500/10"><Flame className="w-4 h-4 text-orange-500" /></div>
-            </div>
-            <p className="text-2xl font-black text-orange-500">{highCount}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">High Priority</p>
-          </div>
-          <div className="bg-card border border-border rounded-2xl p-4 hover:border-primary/30 transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 rounded-lg bg-purple-500/10"><ShieldAlert className="w-4 h-4 text-purple-500" /></div>
-            </div>
-            <p className="text-2xl font-black">{totalFindings}</p>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Total Findings</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Severity Distribution */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Zap className="w-5 h-5 text-yellow-500" />
-              Severity Distribution
-            </h3>
-            <span className="text-xs text-muted-foreground">All time</span>
-          </div>
-          <div className="h-[250px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats} barSize={40}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 12 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#666', fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0a0a0a', borderRadius: '12px', border: '1px solid #222', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}
-                  cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                />
-                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                  {stats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Risk Breakdown Donut */}
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <h3 className="text-lg font-bold mb-4">Risk Breakdown</h3>
-          <div className="h-[180px] flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats}
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={3}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {stats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0a0a0a', borderRadius: '12px', border: '1px solid #222' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="space-y-2 mt-4">
-            {stats.map((stat, i) => (
-              <div key={i} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stat.color }} />
-                  <span className="text-muted-foreground text-xs">{stat.name}</span>
-                </div>
-                <span className="font-bold text-xs">{stat.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Row: Active Scans & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Active Scans */}
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" />
-              Scan Operations
-            </h3>
-            <Link href="/scans" className="text-xs text-primary font-bold hover:underline flex items-center gap-1">
-              View All <ChevronRight className="w-3 h-3" />
+        <section className="rounded-xl border border-border bg-card p-6 lg:col-span-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Findings by severity</h2>
+            <Link href="/findings" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+              View findings <ChevronRight className="h-3 w-3" aria-hidden />
             </Link>
           </div>
-          <div className="space-y-3">
-            {recentScans.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <ScanSearch className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No scans recorded yet</p>
-              </div>
-            ) : (
-              recentScans.map((scan) => (
-                <Link key={scan.id} href={`/scans/${scan.id}`} className="flex items-center justify-between p-3 rounded-xl hover:bg-accent/50 transition-all group">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${scan.status === 'COMPLETED' ? 'bg-green-500/10' :
-                        scan.status === 'RUNNING' ? 'bg-blue-500/10' : 'bg-red-500/10'
-                      }`}>
-                      {scan.status === 'RUNNING' ? (
-                        <Activity className="w-4 h-4 text-blue-500 animate-pulse" />
-                      ) : scan.status === 'COMPLETED' ? (
-                        <ShieldCheck className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="w-4 h-4 text-red-500" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm group-hover:text-primary transition-colors">{scan.target}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {scan.totalIps || 0} IPs • {scan._count?.findings || 0} findings
-                      </p>
-                    </div>
+          <div className="mt-6 space-y-4">
+            {SEVERITIES.map((s) => {
+              const count = severity[s] ?? 0;
+              return (
+                <div key={s} className="grid grid-cols-[5rem_1fr_3rem] items-center gap-3">
+                  <span className="text-sm text-muted-foreground">{severityLabel(s)}</span>
+                  <div className="h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className={`h-full rounded-full ${severityBar[s]} transition-all duration-500`} style={{ width: `${(count / largest) * 100}%` }} />
                   </div>
-                  <div className="text-right">
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${scan.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500' :
-                        scan.status === 'RUNNING' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'
-                      }`}>
-                      {scan.status}
-                    </span>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(scan.createdAt).toLocaleDateString()}
+                  <span className="text-right text-sm font-semibold tabular-nums">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          {total === 0 && !loading && (
+            <p className="mt-6 text-sm text-muted-foreground">No findings yet. Run a scan to populate this view.</p>
+          )}
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-sm font-semibold">Recent scans</h2>
+          <Link href="/scans" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            View all <ChevronRight className="h-3 w-3" aria-hidden />
+          </Link>
+        </div>
+        {recentScans.length === 0 ? (
+          <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+            {loading ? 'Loading...' : 'No scans recorded yet.'}
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {recentScans.map((scan) => (
+              <li key={scan.id}>
+                <Link href={`/scans/${scan.id}`} className="flex items-center justify-between gap-4 px-6 py-3 transition-colors hover:bg-accent/40">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-medium">{scan.target}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {scan.totalIps} {scan.totalIps === 1 ? 'IP' : 'IPs'}, {scan._count?.findings ?? 0} findings
                     </p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-4">
+                    <span className="hidden text-xs text-muted-foreground sm:block">{formatDateTime(scan.createdAt)}</span>
+                    <StatusBadge status={scan.status} />
+                  </div>
                 </Link>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions & System Status */}
-        <div className="bg-card border border-border rounded-2xl p-6">
-          <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-            <Target className="w-5 h-5 text-primary" />
-            Quick Actions
-          </h3>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <Link href="/scans" className="p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-accent/30 transition-all text-center group">
-              <ScanSearch className="w-6 h-6 mx-auto mb-2 text-primary group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold">New Scan</p>
-            </Link>
-            <Link href="/attack-surface" className="p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-accent/30 transition-all text-center group">
-              <Globe className="w-6 h-6 mx-auto mb-2 text-blue-500 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold">Attack Surface</p>
-            </Link>
-            <Link href="/findings" className="p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-accent/30 transition-all text-center group">
-              <Eye className="w-6 h-6 mx-auto mb-2 text-purple-500 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold">All Findings</p>
-            </Link>
-            <Link href="/schedules" className="p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-accent/30 transition-all text-center group">
-              <Calendar className="w-6 h-6 mx-auto mb-2 text-green-500 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold">Schedules</p>
-            </Link>
-          </div>
-
-          {/* System Status */}
-          <div className="border-t border-border pt-4">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-3">System Status</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Scanning Engine</span>
-                <span className="flex items-center gap-1.5 text-xs text-green-500 font-bold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Operational
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Active Scans</span>
-                <span className="text-xs font-bold">{activeScans}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Last Discovery</span>
-                <span className="text-xs font-bold">
-                  {findings.length > 0 ? new Date(findings[0].updatedAt).toLocaleTimeString() : 'N/A'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

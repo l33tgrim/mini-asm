@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { handleError } from '@/lib/api';
 
 export async function GET() {
     try {
-        const findings = await prisma.finding.findMany({
-            orderBy: { updatedAt: 'desc' },
-            include: {
-                scans: {
-                    take: 1,
-                    orderBy: { createdAt: 'desc' },
-                    select: { target: true }
-                }
-            }
-        });
+        const findings = await prisma.finding.findMany({ orderBy: { updatedAt: 'desc' } });
         return NextResponse.json(findings);
     } catch (error) {
-        return NextResponse.json({ error: 'Failed to fetch findings' }, { status: 500 });
+        return handleError('GET /api/findings', error);
     }
 }
