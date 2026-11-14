@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+prisma/dev.db*
+.env*
+!.env.example
+test
+docs
+*.md
+tsconfig.tsbuildinfo
+.miniasm-stop
+Dockerfile
+docker-compose.yml

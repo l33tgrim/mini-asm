@@ -38,6 +38,37 @@ Open http://localhost:3000. For production use `npm run build` then `npm start`.
 
 The database file is not kept in git. It is created by `npm run db:migrate`.
 
+## Running in a container
+
+```bash
+cp .env.example .env            # set ASM_USERNAME and ASM_PASSWORD
+docker compose up -d --build
+```
+
+Open http://localhost:3001. The image is a multi-stage build on the current
+Node LTS Alpine base with the latest OS patches applied at build time. It runs
+as a non-root user on a read-only filesystem with all Linux capabilities
+dropped, and it has no package manager inside. The database lives on the
+`asm-data` volume and migrations are applied each time the container starts.
+Rebuild with `docker compose build --pull` to pick up new base image patches.
+
+## Vulnerability checks
+
+Port scanning is only the first step. The Vulnerability Assessment playbook
+also runs:
+
+- `cve-enrichment`: known CVEs for the service versions found on open ports.
+- `web-tech-vulns`: web server, framework and front-end library versions with
+  known vulnerabilities or no vendor support.
+- `web-exposure-scan`: files and consoles that should not be public (`.git`,
+  `.env`, debug pages, admin tools, API schemas). A hit is reported only when
+  the content has the expected format, which confirms it without storing it.
+- TLS, security headers, cookies, CORS, HTTP methods and directory listing.
+
+Confirmation is always non-destructive. The proof scenarios (reach, command,
+data) show that a weakness is real with a handshake, one read-only command or
+metadata counts. See [docs/SAFETY.md](docs/SAFETY.md).
+
 ## Access control
 
 | Variable | Purpose |

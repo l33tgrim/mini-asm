@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "db:migrate": "prisma migrate deploy",
-    "postinstall": "prisma generate",
+    "db:migrate": "DATABASE_URL=${DATABASE_URL:-file:./dev.db} prisma migrate deploy",
+    "postinstall": "DATABASE_URL=${DATABASE_URL:-file:./dev.db} prisma generate",
     "miniasm": "tsx bin/miniasm.ts",
     "test": "tsx --test test/*.test.ts"
   },
@@ -33,5 +33,10 @@
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.8"
+    }
   }
 }

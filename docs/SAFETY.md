@@ -55,6 +55,11 @@ confirms authorization" and mirrors how commercial scanners verify domains.
   `pwd`). With no adapter registered, it runs nothing and reports dry-run.
 - Proof of data: we return metadata only (key counts, index names and document
   counts, container lists). We never SELECT, dump, or copy records.
+- Web exposure scan: plain GET requests for well-known paths. A hit is confirmed
+  by the format of the response (for example a Git HEAD pointer or setting
+  names). We record counts and formats, never file contents or secret values.
+- Known-vulnerability checks: matched on the reported software version only.
+  Nothing is sent that tries to trigger a flaw.
 - WAF testing: benign canary payloads that do nothing even if they reach the app.
   We measure which categories the WAF blocks, we do not exploit.
 

@@ -16,6 +16,8 @@ import { openRedirect } from './open-redirect';
 import { subdomainTakeover } from './subdomain-takeover';
 import { directoryListing } from './directory-listing';
 import { httpMethods } from './http-methods';
+import { webExposureScan } from './web-exposure-scan';
+import { webTechVulns } from './web-tech-vulns';
 
 /**
  * The scenario catalog. To add a scenario, create a file in this directory that
@@ -40,4 +42,6 @@ export const ALL_SCENARIOS: Scenario[] = [
     subdomainTakeover,
     directoryListing,
     httpMethods,
+    webExposureScan,
+    webTechVulns,
 ];

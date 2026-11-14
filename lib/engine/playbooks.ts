@@ -15,6 +15,14 @@ export const ALL_PLAYBOOKS: Playbook[] = [
         attckTactics: ['Reconnaissance', 'Initial Access'],
     },
     {
+        id: 'vulnerability-assessment',
+        name: 'Vulnerability Assessment (safe)',
+        description: 'Beyond open ports: known-vulnerable service and web software versions, exposed files and consoles, weak TLS and missing protections. Detection and read-only confirmation, nothing is exploited.',
+        threat: 'Attacker looking for a known weakness to use',
+        scenarioIds: ['recon-exposure', 'exposed-services', 'cve-enrichment', 'web-tech-vulns', 'web-exposure-scan', 'tls-posture', 'security-headers', 'cookie-security', 'cors-misconfig', 'http-methods', 'directory-listing'],
+        attckTactics: ['Reconnaissance', 'Initial Access'],
+    },
+    {
         id: 'ransomware-precursors',
         name: 'Ransomware Precursors',
         description: 'The exposed entry points ransomware crews use: RDP/SMB exposure, outdated services, reachable management surfaces.',
@@ -43,7 +51,7 @@ export const ALL_PLAYBOOKS: Playbook[] = [
         name: 'Web Application Assessment',
         description: 'Full non-destructive web hygiene sweep: headers, cookies, CORS, methods, redirects, directory listing and leaked files.',
         threat: 'Opportunistic web application attacker',
-        scenarioIds: ['recon-exposure', 'security-headers', 'cookie-security', 'cors-misconfig', 'http-methods', 'open-redirect', 'directory-listing', 'exposed-services'],
+        scenarioIds: ['recon-exposure', 'security-headers', 'cookie-security', 'cors-misconfig', 'http-methods', 'open-redirect', 'directory-listing', 'web-exposure-scan', 'web-tech-vulns', 'exposed-services'],
         attckTactics: ['Initial Access', 'Collection'],
     },
     {

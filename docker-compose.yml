@@ -1,0 +1,30 @@
+# Mini ASM on http://localhost:3001
+#
+#   cp .env.example .env    then set ASM_USERNAME and ASM_PASSWORD
+#   docker compose up -d --build
+services:
+  mini-asm:
+    build: .
+    image: mini-asm:latest
+    container_name: mini-asm
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      ASM_USERNAME: ${ASM_USERNAME:-}
+      ASM_PASSWORD: ${ASM_PASSWORD:-}
+      ASM_AUTH_DISABLED: ${ASM_AUTH_DISABLED:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - asm-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  asm-data:

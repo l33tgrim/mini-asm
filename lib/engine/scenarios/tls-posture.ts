@@ -23,7 +23,7 @@ function inspectTls(host: string, port: number): Promise<TlsInfo> {
                     const validTo = cert?.valid_to || 'Unknown';
                     const daysLeft = validTo !== 'Unknown' ? Math.floor((new Date(validTo).getTime() - Date.now()) / 86400000) : 0;
                     resolve({
-                        issuer: cert?.issuer?.O || cert?.issuer?.CN || 'Unknown',
+                        issuer: [cert?.issuer?.O || cert?.issuer?.CN || 'Unknown'].flat().join(', '),
                         validTo,
                         protocol: socket.getProtocol(),
                         daysLeft,
