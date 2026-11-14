@@ -12,7 +12,7 @@ const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const body = await readJsonBody(req);
     if (!body) return errorResponse('Request body must be JSON.', 400);
-    const { scenarioId, playbookId, customPlaybookId } = body;
+    const { scenarioId, scenarioIds, playbookId, customPlaybookId } = body;
 
     try {
         const { id: engagementId } = await params;
@@ -24,6 +24,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             const runs = await runSteps(pb.steps, target, eng);
             for (const r of runs) await persistRun(engagementId, r, customPlaybookId);
             return NextResponse.json({ playbookId: pb.id, playbookName: pb.name, runs });
+        }
+
+        // A hand-picked set of scenarios, e.g. the ones suggested for an asset on the attack surface page.
+        if (Array.isArray(scenarioIds)) {
+            const ids = [...new Set(scenarioIds)];
+            if (ids.length === 0 || ids.length > 30 || !ids.every((s) => typeof s === 'string' && getScenario(s))) {
+                return errorResponse('scenarioIds must list between 1 and 30 known scenarios.', 400);
+            }
+            const runs = await runSteps(ids.map((s) => ({ scenarioId: s as string })), target, eng);
+            for (const r of runs) await persistRun(engagementId, r);
+            return NextResponse.json({ runs });
         }
 
         if (typeof playbookId === 'string') {

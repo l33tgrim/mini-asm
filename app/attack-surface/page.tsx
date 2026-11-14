@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, Flame, Globe, Loader2, Network, ScanSearch, Search, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Crosshair, Flame, Globe, Loader2, Network, ScanSearch, Search, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { splitList, type Finding } from '@/components/FindingCard';
 import { ErrorBanner, PageHeader, SeverityBadge, StatCard } from '@/components/ui';
+import { ThreatScenarioDialog } from '@/components/ThreatScenarioDialog';
 import { SEVERITY_RANK, apiError, formatDateTime, severityBar } from '@/lib/ui';
 
 interface Host {
@@ -55,6 +56,7 @@ export default function AttackSurfacePage() {
     const [filter, setFilter] = useState('');
     const [scanning, setScanning] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
+    const [testing, setTesting] = useState<{ target: string; ports: Host['ports'] } | null>(null);
 
     useEffect(() => {
         (async () => {
@@ -210,6 +212,15 @@ export default function AttackSurfacePage() {
                                         </button>
                                         <button
                                             type="button"
+                                            onClick={() => setTesting({ target: host.ip, ports: host.ports })}
+                                            aria-label={`Threat scenarios for ${host.ip}`}
+                                            title="Run threat scenarios against this host"
+                                            className="shrink-0 rounded-full border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                        >
+                                            <Crosshair className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={() => startScan(host.ip)}
                                             disabled={scanning !== null}
                                             aria-label={`Rescan ${host.ip}`}
@@ -224,20 +235,31 @@ export default function AttackSurfacePage() {
                                         <div className="space-y-4 border-t border-border bg-background/40 p-4">
                                             {host.domains.length > 0 && (
                                                 <div>
-                                                    <p className="mb-2 text-xs font-semibold text-muted-foreground">Hostnames (select one to scan it)</p>
-                                                    <div className="flex flex-wrap gap-1.5">
+                                                    <p className="mb-2 text-xs font-semibold text-muted-foreground">Hostnames</p>
+                                                    <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
                                                         {host.domains.map((d) => (
-                                                            <button
-                                                                key={d}
-                                                                type="button"
-                                                                onClick={() => startScan(d)}
-                                                                disabled={scanning !== null}
-                                                                className="rounded-full border border-border bg-muted px-2 py-1 font-mono text-xs transition-colors hover:border-secondary hover:bg-accent disabled:opacity-50"
-                                                            >
-                                                                {d}
-                                                            </button>
+                                                            <li key={d} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                                                                <span className="min-w-0 break-all font-mono text-xs">{d}</span>
+                                                                <span className="flex shrink-0 gap-1.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setTesting({ target: d, ports: host.ports })}
+                                                                        className="flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                                                                    >
+                                                                        <Crosshair className="h-3 w-3" aria-hidden /> Threat scenarios
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => startScan(d)}
+                                                                        disabled={scanning !== null}
+                                                                        className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs transition-colors hover:border-secondary hover:bg-accent disabled:opacity-50"
+                                                                    >
+                                                                        {scanning === d ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <ScanSearch className="h-3 w-3" aria-hidden />} Scan
+                                                                    </button>
+                                                                </span>
+                                                            </li>
                                                         ))}
-                                                    </div>
+                                                    </ul>
                                                 </div>
                                             )}
 
@@ -292,6 +314,7 @@ export default function AttackSurfacePage() {
                     })
                 )}
             </div>
+            {testing && <ThreatScenarioDialog target={testing.target} ports={testing.ports} onClose={() => setTesting(null)} />}
         </div>
     );
 }

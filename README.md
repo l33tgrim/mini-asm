@@ -89,6 +89,17 @@ explicitly disabled. In development it runs open when no credentials are set. Pu
 app behind HTTPS when it is reachable over a network; the session cookie is marked
 secure automatically when served over HTTPS. Cross-site write requests are always refused.
 
+## Testing an asset from the attack surface
+
+Each host and hostname on the Attack surface page has a Threat scenarios button. It
+looks at what the scans found on that asset (web ports, TLS, data stores, whether it
+is a hostname or an IP) and offers only the scenarios that apply, already ticked.
+Pick an engagement whose scope covers the asset, add the asset to another
+engagement's scope, or let it create a new SAFE engagement for it. The results land
+on that engagement's page. Breach proofs are listed separately and stay locked
+unless the engagement is authorised, in ACTIVE mode, and the asset is
+ownership-verified, the same gates as everywhere else.
+
 ## Authorisation first
 
 Nothing active runs without an authorised engagement and ownership-verified scope.
