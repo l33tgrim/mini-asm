@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 
 const poppins = Poppins({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"], variable: "--font-poppins" });
 
@@ -19,12 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${poppins.variable} min-h-screen bg-background`}>
-        <Sidebar />
-        <main className="min-h-screen lg:pl-64">
-          <div className="mx-auto max-w-7xl p-5 sm:p-8">
-            {children}
-          </div>
-        </main>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

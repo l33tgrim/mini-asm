@@ -50,7 +50,9 @@ Node LTS Alpine base with the latest OS patches applied at build time. It runs
 as a non-root user on a read-only filesystem with all Linux capabilities
 dropped, and it has no package manager inside. The database lives on the
 `asm-data` volume and migrations are applied each time the container starts.
-Rebuild with `docker compose build --pull` to pick up new base image patches.
+To update to the latest version from GitHub, run `.\update.ps1` on Windows or
+`./update.sh` elsewhere. It pulls the code, rebuilds with the newest base image
+and restarts the container. Your data stays on the volume.
 
 ## Vulnerability checks
 
@@ -71,15 +73,21 @@ metadata counts. See [docs/SAFETY.md](docs/SAFETY.md).
 
 ## Access control
 
+The app opens on a sign-in page that checks `ASM_USERNAME` and `ASM_PASSWORD`.
+Sessions last 12 hours, are signed, and end when the password changes. Scripts
+can still send the same credentials as HTTP Basic auth on each request. Ten
+failed sign-ins from one address lock it out for 15 minutes.
+
 | Variable | Purpose |
 | --- | --- |
-| `ASM_USERNAME`, `ASM_PASSWORD` | Credentials for HTTP Basic authentication on every page and API route |
+| `ASM_USERNAME`, `ASM_PASSWORD` | Credentials for the sign-in page, also accepted as Basic auth by scripts |
+| `ASM_SESSION_SECRET` | Optional key for signing sessions. Without it the key is derived from the credentials |
 | `ASM_AUTH_DISABLED=true` | Runs without a login. Use only on a trusted local machine |
 
 In production the app answers `503` until credentials are set or authentication is
-explicitly disabled. In development it runs open when no credentials are set. Basic
-authentication sends the password on every request, so put the app behind HTTPS when
-it is reachable over a network. Cross-site write requests are always refused.
+explicitly disabled. In development it runs open when no credentials are set. Put the
+app behind HTTPS when it is reachable over a network; the session cookie is marked
+secure automatically when served over HTTPS. Cross-site write requests are always refused.
 
 ## Authorisation first
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe, Target, Crosshair } from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe, Target, Crosshair, LogOut } from 'lucide-react';
 import { PayIncLogo } from '@/components/ui';
 import axios from 'axios';
 
@@ -21,6 +21,12 @@ export default function Sidebar() {
     const pathname = usePathname();
     const [runningScans, setRunningScans] = useState(0);
     const [priorityFindings, setPriorityFindings] = useState(0);
+    const [user, setUser] = useState<string | null>(null);
+
+    useEffect(() => {
+        axios.get('/api/auth/session').then(({ data }) => setUser(data.authEnabled ? data.user : null)).catch(() => {});
+    }, []);
+
 
     useEffect(() => {
         let cancelled = false;
@@ -84,9 +90,25 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            <p className="hidden p-6 text-xs leading-relaxed text-white/80 lg:block">
-                Only scan systems you own or are authorised to test.
-            </p>
+            <div className="flex shrink-0 items-center px-2 lg:block lg:p-6">
+                {user && (
+                    <div className="flex items-center gap-2 lg:mb-4 lg:justify-between lg:border-b lg:border-white/15 lg:pb-4">
+                        <span className="hidden truncate text-sm text-white/80 lg:block" title={`Signed in as ${user}`}>{user}</span>
+                        <form action="/api/auth/logout" method="post">
+                            <button
+                                type="submit"
+                                className="flex items-center gap-2 rounded-full px-3 py-2 text-sm text-white transition-colors hover:bg-white/15"
+                            >
+                                <LogOut className="h-4 w-4" aria-hidden />
+                                <span className="sr-only lg:not-sr-only">Sign out</span>
+                            </button>
+                        </form>
+                    </div>
+                )}
+                <p className="hidden text-xs leading-relaxed text-white/80 lg:block">
+                    Only scan systems you own or are authorised to test.
+                </p>
+            </div>
         </aside>
     );
 }
