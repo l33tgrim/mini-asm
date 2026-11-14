@@ -1,45 +1,48 @@
 @import "tailwindcss";
 
 /*
- * Brand tokens. Every colour in the app derives from this block, so the palette
- * can be changed here without touching components.
+ * PayInc corporate identity (Master Brand Manual, Oct 2025).
+ * Every colour in the app derives from this block. Tints are mixes of a brand
+ * colour with white; nothing outside the brand and data palettes is used.
  */
 @theme {
-  --color-background: #0a1120;
-  --color-foreground: #e8edf5;
+  --color-payinc-dark-blue: #1D1A60;
+  --color-payinc-light-blue: #007AFF;
+  --color-payinc-yellow: #FFE000;
 
-  --color-card: #101a2e;
-  --color-card-foreground: #e8edf5;
+  --color-background: #FFFFFF;
+  --color-foreground: #1D1A60;
 
-  --color-popover: #101a2e;
-  --color-popover-foreground: #e8edf5;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #1D1A60;
 
-  --color-primary: #2f7fd6;
-  --color-primary-foreground: #ffffff;
+  --color-primary: #1D1A60;
+  --color-primary-foreground: #FFFFFF;
 
-  --color-secondary: #162238;
-  --color-secondary-foreground: #e8edf5;
+  --color-secondary: #007AFF;
+  --color-secondary-foreground: #FFFFFF;
 
-  --color-muted: #162238;
-  --color-muted-foreground: #8a99b4;
+  --color-muted: color-mix(in srgb, #BFDEFF 28%, #FFFFFF);
+  --color-muted-foreground: #3D5166;
 
-  --color-accent: #1a2944;
-  --color-accent-foreground: #e8edf5;
+  --color-accent: color-mix(in srgb, #BFDEFF 50%, #FFFFFF);
+  --color-accent-foreground: #1D1A60;
 
-  --color-destructive: #dc2626;
-  --color-destructive-foreground: #ffffff;
+  --color-border: #BFDEFF;
+  --color-input: #BFDEFF;
+  --color-ring: #007AFF;
 
-  --color-border: #1e2b44;
-  --color-input: #1e2b44;
-  --color-ring: #2f7fd6;
+  /* Severity uses the data palette: orange for the worst case, then a blue ramp. No red or green. */
+  --color-sev-critical: #FFA200;
+  --color-sev-high: #003D80;
+  --color-sev-medium: #005CBF;
+  --color-sev-low: #80BDFF;
+  --color-sev-info: #3D5166;
+  --color-success: #005CBF;
 
-  /* Severity scale, shared by badges, bars and counters. */
-  --color-sev-critical: #ef4444;
-  --color-sev-high: #f97316;
-  --color-sev-medium: #eab308;
-  --color-sev-low: #38bdf8;
-  --color-sev-info: #94a3b8;
-  --color-success: #22c55e;
+  --font-sans: var(--font-poppins), "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* The identity allows one typeface, so technical values use Poppins with tabular figures. */
+  --font-mono: var(--font-poppins), "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 @layer base {
@@ -49,6 +52,18 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    font-weight: 300;
+    letter-spacing: 0.01em;
+  }
+
+  h1 {
+    line-height: 1.1;
+  }
+
+  .font-mono,
+  pre {
+    font-variant-numeric: tabular-nums;
   }
 
   :focus-visible {

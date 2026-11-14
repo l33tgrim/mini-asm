@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import FindingCard, { type Finding } from '@/components/FindingCard';
 import { ErrorBanner, StatusBadge } from '@/components/ui';
-import { SEVERITIES, apiError, formatDateTime, formatDuration, severityLabel, severityText } from '@/lib/ui';
+import { SEVERITIES, apiError, formatDateTime, formatDuration, severityBar, severityLabel } from '@/lib/ui';
 
 interface Scan {
     id: string;
@@ -96,7 +96,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         return (
             <div className="space-y-4 py-24 text-center">
                 <p className="text-sm text-muted-foreground">{notFound ? 'This scan does not exist.' : error}</p>
-                <Link href="/scans" className="text-sm font-medium text-primary hover:underline">Back to scans</Link>
+                <Link href="/scans" className="text-sm font-medium text-foreground underline decoration-secondary decoration-2 underline-offset-4 hover:decoration-foreground">Back to scans</Link>
             </div>
         );
     }
@@ -117,12 +117,12 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         <div className="space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
-                    <Link href="/scans" aria-label="Back to scans" className="mt-0.5 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+                    <Link href="/scans" aria-label="Back to scans" className="mt-0.5 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
                         <ArrowLeft className="h-5 w-5" />
                     </Link>
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="truncate font-mono text-2xl font-semibold tracking-tight">{scan.target}</h1>
+                            <h1 className="truncate font-mono text-3xl font-bold">{scan.target}</h1>
                             <StatusBadge status={scan.status} />
                         </div>
                         <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -141,7 +141,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                             type="button"
                             onClick={() => handleAction('RESUME')}
                             disabled={busy}
-                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                            className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                         >
                             <Play className="h-4 w-4" aria-hidden />
                             Resume
@@ -151,7 +151,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         type="button"
                         onClick={() => handleAction('RESCAN')}
                         disabled={busy || isLive}
-                        className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden />
                         Rescan
@@ -162,7 +162,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             <ErrorBanner message={error} />
 
             {status !== 'COMPLETED' && (
-                <section className="rounded-xl border border-border bg-card p-5">
+                <section className="rounded-2xl border border-border bg-card p-5">
                     <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                         <div>
                             <p className="text-sm font-semibold">{isLive ? 'Scanning' : 'Scan stopped'}</p>
@@ -182,12 +182,12 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             )}
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-                <aside className="h-fit rounded-xl border border-border bg-card p-5">
+                <aside className="h-fit rounded-2xl border border-border bg-card p-5">
                     <h2 className="text-sm font-semibold">Findings</h2>
                     <dl className="mt-4 space-y-3">
                         {SEVERITIES.map((sev) => (
                             <div key={sev} className="flex items-center justify-between">
-                                <dt className={`text-sm ${severityText[sev]}`}>{severityLabel(sev)}</dt>
+                                <dt className="flex items-center gap-2 text-sm"><span className={`h-2.5 w-2.5 rounded-full ${severityBar[sev]}`} aria-hidden />{severityLabel(sev)}</dt>
                                 <dd className="text-sm font-semibold tabular-nums">{scan.findings.filter((f) => f.severity === sev).length}</dd>
                             </div>
                         ))}
@@ -207,14 +207,14 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                             placeholder="Filter by IP, port, service, domain or issue"
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
-                            className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+                            className="w-full rounded-full border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
                         />
                     </div>
 
                     {filteredFindings.map((finding) => <FindingCard key={finding.id} finding={finding} />)}
 
                     {filteredFindings.length === 0 && (
-                        <p className="rounded-xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
+                        <p className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
                             {scan.findings.length > 0
                                 ? 'No findings match that filter.'
                                 : isLive ? 'No open services found yet.' : 'No open services were found on this target.'}

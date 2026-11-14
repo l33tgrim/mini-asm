@@ -76,7 +76,7 @@ export default function FindingsPage() {
                     type="button"
                     onClick={() => exportCsv(filtered)}
                     disabled={filtered.length === 0}
-                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <Download className="h-4 w-4" aria-hidden />
                     Export CSV
@@ -87,8 +87,8 @@ export default function FindingsPage() {
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard label="Total findings" value={findings.length} icon={ListChecks} />
-                <StatCard label="Critical" value={critical} icon={AlertTriangle} tone={critical ? 'text-sev-critical' : undefined} />
-                <StatCard label="High" value={high} icon={Flame} tone={high ? 'text-sev-high' : undefined} />
+                <StatCard label="Critical" value={critical} icon={AlertTriangle} />
+                <StatCard label="High" value={high} icon={Flame} />
                 <StatCard label="With issues" value={findings.filter((f) => f.vulnerability).length} icon={ShieldAlert} />
             </div>
 
@@ -101,17 +101,17 @@ export default function FindingsPage() {
                         placeholder="Search by IP, port, service, domain or issue"
                         value={searchQuery}
                         onChange={(e) => { setSearchQuery(e.target.value); setVisible(PAGE_SIZE); }}
-                        className="w-full rounded-lg border border-border bg-card py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+                        className="w-full rounded-full border border-border bg-card py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
                     />
                 </div>
-                <div role="group" aria-label="Filter by severity" className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-card p-1">
+                <div role="group" aria-label="Filter by severity" className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-card p-1">
                     {['ALL', ...SEVERITIES].map((s) => (
                         <button
                             key={s}
                             type="button"
                             aria-pressed={filter === s}
                             onClick={() => { setFilter(s); setVisible(PAGE_SIZE); }}
-                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${filter === s ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                         >
                             {s === 'ALL' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
                         </button>
@@ -121,9 +121,9 @@ export default function FindingsPage() {
 
             <div className="space-y-3">
                 {loading && findings.length === 0 ? (
-                    <p className="rounded-xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">Loading findings...</p>
+                    <p className="rounded-2xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">Loading findings...</p>
                 ) : filtered.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
+                    <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
                         <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" aria-hidden />
                         <p className="text-sm font-medium">No findings to show</p>
                         <p className="mt-1 text-sm text-muted-foreground">
@@ -141,7 +141,7 @@ export default function FindingsPage() {
                         Showing {Math.min(visible, filtered.length)} of {filtered.length} findings
                     </p>
                     {visible < filtered.length && (
-                        <button type="button" onClick={() => setVisible(visible + PAGE_SIZE)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent">
+                        <button type="button" onClick={() => setVisible(visible + PAGE_SIZE)} className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent">
                             Show more
                         </button>
                     )}

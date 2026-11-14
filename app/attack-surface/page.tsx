@@ -115,7 +115,7 @@ export default function AttackSurfacePage() {
                         placeholder="Search IP, domain or service"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
-                        className="w-full rounded-lg border border-border bg-card py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+                        className="w-full rounded-full border border-border bg-card py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
                     />
                 </div>
             </PageHeader>
@@ -125,12 +125,12 @@ export default function AttackSurfacePage() {
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard label="Hosts" value={hosts.length} icon={Globe} />
                 <StatCard label="Open ports" value={openPorts} icon={Network} />
-                <StatCard label="Critical hosts" value={critical} icon={AlertTriangle} tone={critical ? 'text-sev-critical' : undefined} />
-                <StatCard label="High risk hosts" value={high} icon={Flame} tone={high ? 'text-sev-high' : undefined} />
+                <StatCard label="Critical hosts" value={critical} icon={AlertTriangle} />
+                <StatCard label="High risk hosts" value={high} icon={Flame} />
             </div>
 
             {recon && (
-                <section className="rounded-xl border border-border bg-card p-5">
+                <section className="rounded-2xl border border-border bg-card p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                             <h2 className="text-sm font-semibold">Domain reconnaissance</h2>
@@ -142,7 +142,7 @@ export default function AttackSurfacePage() {
                         <ul className="mt-3 space-y-1">
                             {recon.issues.map((issue) => (
                                 <li key={issue} className="flex items-start gap-2 text-sm">
-                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sev-medium" aria-hidden />
+                                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sev-critical" aria-hidden />
                                     {issue}
                                 </li>
                             ))}
@@ -150,7 +150,7 @@ export default function AttackSurfacePage() {
                     )}
                     {recon.forensics && (
                         <details className="group mt-3">
-                            <summary className="flex w-fit list-none items-center gap-1 text-xs font-medium text-primary hover:underline">
+                            <summary className="flex w-fit list-none items-center gap-1 text-xs font-medium text-foreground underline decoration-secondary decoration-2 underline-offset-4 hover:decoration-foreground">
                                 <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" aria-hidden />
                                 Discovery details
                             </summary>
@@ -162,9 +162,9 @@ export default function AttackSurfacePage() {
 
             <div className="space-y-3">
                 {loading ? (
-                    <p className="rounded-xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">Loading hosts...</p>
+                    <p className="rounded-2xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">Loading hosts...</p>
                 ) : filteredHosts.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
+                    <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
                         <Globe className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" aria-hidden />
                         <p className="text-sm text-muted-foreground">
                             {hosts.length === 0 ? 'No hosts discovered yet. Run a scan to map your attack surface.' : 'No hosts match that search.'}
@@ -175,7 +175,7 @@ export default function AttackSurfacePage() {
                         const isOpen = expanded === host.ip;
                         const issueCount = host.ports.reduce((a, p) => a + p.issues.length, 0);
                         return (
-                            <article key={host.ip} className="flex overflow-hidden rounded-xl border border-border bg-card">
+                            <article key={host.ip} className="flex overflow-hidden rounded-2xl border border-border bg-card">
                                 <div className={`w-1 shrink-0 ${severityBar[host.maxSeverity] ?? severityBar.INFO}`} aria-hidden />
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2 p-4">
@@ -214,7 +214,7 @@ export default function AttackSurfacePage() {
                                             disabled={scanning !== null}
                                             aria-label={`Rescan ${host.ip}`}
                                             title="Rescan this host"
-                                            className="shrink-0 rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                                            className="shrink-0 rounded-full border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                                         >
                                             {scanning === host.ip ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
                                         </button>
@@ -232,7 +232,7 @@ export default function AttackSurfacePage() {
                                                                 type="button"
                                                                 onClick={() => startScan(d)}
                                                                 disabled={scanning !== null}
-                                                                className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs transition-colors hover:border-primary/50 hover:text-primary disabled:opacity-50"
+                                                                className="rounded-full border border-border bg-muted px-2 py-1 font-mono text-xs transition-colors hover:border-secondary hover:bg-accent disabled:opacity-50"
                                                             >
                                                                 {d}
                                                             </button>
@@ -246,7 +246,7 @@ export default function AttackSurfacePage() {
                                                     <p className="mb-2 text-xs font-semibold text-muted-foreground">Technology</p>
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {host.techStack.map((t) => (
-                                                            <span key={t} className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">{t}</span>
+                                                            <span key={t} className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">{t}</span>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -272,7 +272,7 @@ export default function AttackSurfacePage() {
                                                                 <ul className="mt-2 space-y-1">
                                                                     {p.issues.map((issue) => (
                                                                         <li key={issue} className="flex items-start gap-2 text-xs">
-                                                                            <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0 text-sev-medium" aria-hidden />
+                                                                            <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0 text-sev-critical" aria-hidden />
                                                                             {issue}
                                                                         </li>
                                                                     ))}

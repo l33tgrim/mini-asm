@@ -5,7 +5,7 @@ import { ScanSearch, RefreshCw, Globe, ShieldAlert, AlertTriangle, Activity, Che
 import axios from 'axios';
 import Link from 'next/link';
 import { ErrorBanner, IconButton, PageHeader, StatCard, StatusBadge } from '@/components/ui';
-import { SEVERITIES, apiError, formatDateTime, severityBar, severityLabel, severityText } from '@/lib/ui';
+import { SEVERITIES, apiError, formatDateTime, severityBar, severityLabel } from '@/lib/ui';
 
 interface Stats {
   severity: Record<string, number>;
@@ -72,7 +72,7 @@ export default function Dashboard() {
         <IconButton label="Refresh" onClick={fetchData} disabled={loading}>
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </IconButton>
-        <Link href="/scans" className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
+        <Link href="/scans" className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">
           <ScanSearch className="h-4 w-4" aria-hidden />
           New scan
         </Link>
@@ -83,21 +83,21 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Assets discovered" value={stats?.assets ?? 0} icon={Globe} />
         <StatCard label="Total findings" value={total} icon={ShieldAlert} />
-        <StatCard label="Critical" value={severity.CRITICAL ?? 0} icon={AlertTriangle} tone={severity.CRITICAL ? 'text-sev-critical' : undefined} />
-        <StatCard label="Scans running" value={stats?.runningScans ?? 0} icon={Activity} tone={stats?.runningScans ? 'text-primary' : undefined} />
+        <StatCard label="Critical" value={severity.CRITICAL ?? 0} icon={AlertTriangle} />
+        <StatCard label="Scans running" value={stats?.runningScans ?? 0} icon={Activity} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-border bg-card p-6">
+        <section className="rounded-2xl border border-border bg-card p-6">
           <h2 className="text-sm font-semibold">Exposure score</h2>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className={`text-5xl font-semibold tabular-nums ${severityText[risk.level]}`}>{risk.score}</span>
+            <span className="text-5xl font-bold tabular-nums">{risk.score}</span>
             <span className="text-lg text-muted-foreground">/ 100</span>
           </div>
           <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Exposure score ${risk.score} out of 100`}>
             <div className={`h-full ${severityBar[risk.level]} transition-all duration-500`} style={{ width: `${risk.score}%` }} />
           </div>
-          <p className={`mt-3 text-sm font-medium ${severityText[risk.level]}`}>{risk.label} exposure</p>
+          <p className="mt-3 text-sm font-medium">{risk.label} exposure</p>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             Each finding adds points by severity (critical 25, high 10, medium 3, low 1), capped at 100.
           </p>
@@ -106,10 +106,10 @@ export default function Dashboard() {
           </p>
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-6 lg:col-span-2">
+        <section className="rounded-2xl border border-border bg-card p-6 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Findings by severity</h2>
-            <Link href="/findings" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            <Link href="/findings" className="flex items-center gap-1 text-xs font-medium text-foreground underline decoration-secondary decoration-2 underline-offset-4 hover:decoration-foreground">
               View findings <ChevronRight className="h-3 w-3" aria-hidden />
             </Link>
           </div>
@@ -133,10 +133,10 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-sm font-semibold">Recent scans</h2>
-          <Link href="/scans" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          <Link href="/scans" className="flex items-center gap-1 text-xs font-medium text-foreground underline decoration-secondary decoration-2 underline-offset-4 hover:decoration-foreground">
             View all <ChevronRight className="h-3 w-3" aria-hidden />
           </Link>
         </div>

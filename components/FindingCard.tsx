@@ -34,7 +34,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
     const panelId = `finding-${finding.id}`;
 
     return (
-        <article className="flex overflow-hidden rounded-xl border border-border bg-card">
+        <article className="flex overflow-hidden rounded-2xl border border-border bg-card">
             <div className={`w-1 shrink-0 ${severityBar[finding.severity] ?? severityBar.INFO}`} aria-hidden />
             <div className="min-w-0 flex-1">
                 <div className="p-4 sm:p-5">
@@ -47,7 +47,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
                                 </h3>
                                 <SeverityBadge severity={finding.severity} />
                                 {finding.version && (
-                                    <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">v{finding.version}</span>
+                                    <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">v{finding.version}</span>
                                 )}
                             </div>
                             <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
@@ -63,7 +63,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
                             onClick={() => setOpen(!open)}
                             aria-expanded={open}
                             aria-controls={panelId}
-                            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         >
                             Evidence
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
@@ -76,7 +76,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
                             <div className="rounded-lg border border-border bg-background/60 p-3">
                                 <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                    <AlertTriangle className="h-3.5 w-3.5 text-sev-medium" aria-hidden />
+                                    <AlertTriangle className="h-3.5 w-3.5 text-sev-critical" aria-hidden />
                                     {issues.length === 1 ? 'Issue' : `${issues.length} issues`}
                                 </p>
                                 <ul className="mt-2 space-y-1 text-sm">
@@ -101,7 +101,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
                     {tech.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-1.5">
                             {tech.map((t) => (
-                                <span key={t} className="rounded-md border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{t}</span>
+                                <span key={t} className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{t}</span>
                             ))}
                         </div>
                     )}

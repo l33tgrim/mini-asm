@@ -78,12 +78,12 @@ export default function ScansPage() {
 
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <StatCard label="Total scans" value={scans.length} icon={ListChecks} />
-                <StatCard label="Running" value={runningScans.length} icon={Activity} tone={runningScans.length ? 'text-primary' : undefined} />
+                <StatCard label="Running" value={runningScans.length} icon={Activity} />
                 <StatCard label="Completed" value={completedCount} icon={CheckCircle2} />
                 <StatCard label="Findings linked" value={totalFindings} icon={ShieldAlert} />
             </div>
 
-            <section className="rounded-xl border border-border bg-card p-6">
+            <section className="rounded-2xl border border-border bg-card p-6">
                 <h2 className="text-sm font-semibold">New scan</h2>
                 <p className="mt-1 text-sm text-muted-foreground">Enter a domain, an IPv4 address, or a CIDR range of /24 or smaller.</p>
 
@@ -100,13 +100,13 @@ export default function ScansPage() {
                             disabled={isStarting}
                             value={target}
                             onChange={(e) => setTarget(e.target.value)}
-                            className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+                            className="w-full rounded-full border border-border bg-background py-2.5 pl-10 pr-4 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={isStarting || !target.trim()}
-                        className="flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                        className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                     >
                         {isStarting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
                         {isStarting ? 'Resolving target...' : 'Start scan'}
@@ -128,10 +128,10 @@ export default function ScansPage() {
                     {runningScans.map((scan) => {
                         const pct = scan.totalIps ? Math.round((scan.currentIndex / scan.totalIps) * 100) : 0;
                         return (
-                            <Link key={scan.id} href={`/scans/${scan.id}`} className="block rounded-xl border border-primary/30 bg-primary/5 p-4 transition-colors hover:border-primary/50">
+                            <Link key={scan.id} href={`/scans/${scan.id}`} className="block rounded-2xl border border-secondary bg-muted p-4 transition-colors hover:bg-accent">
                                 <div className="flex items-center justify-between gap-4">
                                     <div className="flex min-w-0 items-center gap-3">
-                                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden />
+                                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-secondary" aria-hidden />
                                         <div className="min-w-0">
                                             <p className="truncate font-mono text-sm font-medium">{scan.target}</p>
                                             <p className="text-xs text-muted-foreground">{scan.currentIndex} of {scan.totalIps} IPs scanned</p>
@@ -139,7 +139,7 @@ export default function ScansPage() {
                                     </div>
                                     <div className="flex shrink-0 items-center gap-3">
                                         <div className="h-2 w-24 overflow-hidden rounded-full bg-muted sm:w-40">
-                                            <div className="h-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                                            <div className="h-full bg-secondary transition-all duration-500" style={{ width: `${pct}%` }} />
                                         </div>
                                         <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{pct}%</span>
                                     </div>
@@ -150,7 +150,7 @@ export default function ScansPage() {
                 </section>
             )}
 
-            <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <section className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="flex items-center justify-between border-b border-border px-6 py-4">
                     <h2 className="text-sm font-semibold">History</h2>
                     <span className="text-xs text-muted-foreground">{scans.length} {scans.length === 1 ? 'scan' : 'scans'}</span>

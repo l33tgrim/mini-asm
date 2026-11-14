@@ -123,12 +123,12 @@ export default function SchedulesPage() {
 
             <div className="grid grid-cols-3 gap-4">
                 <StatCard label="Schedules" value={schedules.length} icon={CalendarClock} />
-                <StatCard label="Active" value={activeCount} icon={CheckCircle2} tone={activeCount ? 'text-success' : undefined} />
+                <StatCard label="Active" value={activeCount} icon={CheckCircle2} />
                 <StatCard label="Paused" value={schedules.length - activeCount} icon={Pause} />
             </div>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <section className="h-fit rounded-xl border border-border bg-card p-6">
+                <section className="h-fit rounded-2xl border border-border bg-card p-6">
                     <h2 className="text-sm font-semibold">New schedule</h2>
                     <form onSubmit={handleCreate} className="mt-4 space-y-4">
                         <div>
@@ -144,7 +144,7 @@ export default function SchedulesPage() {
                                     maxLength={253}
                                     value={target}
                                     onChange={(e) => setTarget(e.target.value)}
-                                    className="w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-4 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+                                    className="w-full rounded-full border border-border bg-background py-2.5 pl-10 pr-4 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
                                 />
                             </div>
                         </div>
@@ -158,8 +158,8 @@ export default function SchedulesPage() {
                                         type="button"
                                         aria-pressed={frequency === f.id}
                                         onClick={() => setFrequency(f.id)}
-                                        className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${frequency === f.id
-                                            ? 'border-primary bg-primary/10 text-foreground'
+                                        className={`rounded-full border px-2 py-2 text-xs font-medium transition-colors ${frequency === f.id
+                                            ? 'border-primary bg-primary text-white'
                                             : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
                                             }`}
                                     >
@@ -174,7 +174,7 @@ export default function SchedulesPage() {
                         <button
                             type="submit"
                             disabled={creating || !target.trim()}
-                            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                            className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                         >
                             {creating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
                             Create schedule
@@ -185,7 +185,7 @@ export default function SchedulesPage() {
                     </p>
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-border bg-card lg:col-span-2">
+                <section className="overflow-hidden rounded-2xl border border-border bg-card lg:col-span-2">
                     <div className="border-b border-border px-6 py-4">
                         <h2 className="text-sm font-semibold">Configured schedules</h2>
                     </div>
@@ -214,7 +214,7 @@ export default function SchedulesPage() {
                                             type="button"
                                             onClick={() => toggle(s)}
                                             disabled={busyId !== null}
-                                            className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+                                            className="rounded-full border border-border px-3 py-2 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
                                         >
                                             {s.active ? 'Pause' : 'Enable'}
                                         </button>

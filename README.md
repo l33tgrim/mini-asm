@@ -55,7 +55,8 @@ Limits: 256 IPs per scan, 3 scans at a time, 30 minutes per run (a stopped scan 
   server (`npm start`), not a serverless platform. Scans that were running when the server stopped
   are marked `INTERRUPTED` on the next start and can be resumed.
 - `proxy.ts` handles authentication and rejects cross-site write requests.
-- Colours live in the `@theme` block of `app/globals.css`.
+- The interface follows the PayInc corporate identity (Master Brand Manual, Oct 2025). Colours and type
+  live in the `@theme` block of `app/globals.css`; severity and status chips use the data palette.
 
 ## Known limitations
 

@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe, Shield } from 'lucide-react';
+import { LayoutDashboard, ShieldAlert, ScanSearch, CalendarClock, Globe } from 'lucide-react';
+import { PayIncLogo } from '@/components/ui';
 import axios from 'axios';
 
 const navItems = [
@@ -41,27 +42,24 @@ export default function Sidebar() {
 
     const badgeFor = (href: string) => {
         if (href === '/scans' && runningScans > 0) {
-            return <span className="rounded-md bg-primary/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-primary" title="Running scans">{runningScans}</span>;
+            return <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold tabular-nums text-white" title="Running scans">{runningScans}</span>;
         }
         if (href === '/findings' && priorityFindings > 0) {
-            return <span className="rounded-md bg-sev-critical/15 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sev-critical" title="Critical and high findings">{priorityFindings}</span>;
+            // The one Yellow highlight in the layout.
+            return <span className="rounded-full bg-payinc-yellow px-2 py-0.5 text-xs font-semibold tabular-nums text-payinc-dark-blue" title="Critical and high findings">{priorityFindings}</span>;
         }
         return null;
     };
 
     return (
-        <aside className="z-40 flex border-b border-border bg-card lg:fixed lg:inset-y-0 lg:left-0 lg:w-60 lg:flex-col lg:border-b-0 lg:border-r">
-            <div className="flex items-center gap-3 px-4 py-3 lg:border-b lg:border-border lg:px-5 lg:py-5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                    <Shield className="h-5 w-5 text-primary-foreground" aria-hidden />
-                </div>
-                <div className="hidden sm:block">
-                    <p className="text-sm font-semibold leading-tight">Mini ASM</p>
-                    <p className="text-xs text-muted-foreground">Attack surface management</p>
-                </div>
+        <aside className="z-40 flex bg-primary text-white lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col">
+            <div className="flex shrink-0 items-center px-5 py-3 lg:block lg:px-6 lg:pb-6 lg:pt-8">
+                <PayIncLogo onDark className="h-[45px] w-auto" />
+                <p className="mt-4 hidden text-base font-semibold lg:block">Mini ASM</p>
+                <p className="hidden text-sm text-white/80 lg:block">Attack surface management</p>
             </div>
 
-            <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto px-2 lg:flex-col lg:items-stretch lg:overflow-visible lg:p-3">
+            <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto px-2 lg:flex-col lg:items-stretch lg:overflow-visible lg:px-4">
                 {navItems.map((item) => {
                     const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
                     return (
@@ -69,13 +67,13 @@ export default function Sidebar() {
                             key={item.href}
                             href={item.href}
                             aria-current={isActive ? 'page' : undefined}
-                            className={`flex shrink-0 items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive
-                                ? 'bg-primary/15 text-foreground'
-                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                            className={`flex shrink-0 items-center justify-between gap-3 rounded-full px-4 py-2.5 text-sm transition-colors ${isActive
+                                ? 'bg-white font-semibold text-primary'
+                                : 'font-normal text-white hover:bg-white/15'
                                 }`}
                         >
                             <span className="flex items-center gap-3">
-                                <item.icon className={`h-4 w-4 ${isActive ? 'text-primary' : ''}`} aria-hidden />
+                                <item.icon className="h-4 w-4" aria-hidden />
                                 {item.name}
                             </span>
                             {badgeFor(item.href)}
@@ -84,7 +82,7 @@ export default function Sidebar() {
                 })}
             </nav>
 
-            <p className="hidden border-t border-border p-4 text-xs leading-relaxed text-muted-foreground lg:block">
+            <p className="hidden p-6 text-xs leading-relaxed text-white/80 lg:block">
                 Only scan systems you own or are authorised to test.
             </p>
         </aside>

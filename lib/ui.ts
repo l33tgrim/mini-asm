@@ -5,20 +5,13 @@ export type Severity = (typeof SEVERITIES)[number];
 
 export const SEVERITY_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, INFO: 0 };
 
+// Filled chips, each pairing checked for contrast (Dark Blue on orange 8:1, white on the dark blues 7:1+).
 export const severityBadge: Record<string, string> = {
-    CRITICAL: 'text-sev-critical bg-sev-critical/10 border-sev-critical/30',
-    HIGH: 'text-sev-high bg-sev-high/10 border-sev-high/30',
-    MEDIUM: 'text-sev-medium bg-sev-medium/10 border-sev-medium/30',
-    LOW: 'text-sev-low bg-sev-low/10 border-sev-low/30',
-    INFO: 'text-sev-info bg-sev-info/10 border-sev-info/30',
-};
-
-export const severityText: Record<string, string> = {
-    CRITICAL: 'text-sev-critical',
-    HIGH: 'text-sev-high',
-    MEDIUM: 'text-sev-medium',
-    LOW: 'text-sev-low',
-    INFO: 'text-sev-info',
+    CRITICAL: 'bg-sev-critical text-foreground border-sev-critical',
+    HIGH: 'bg-sev-high text-white border-sev-high',
+    MEDIUM: 'bg-sev-medium text-white border-sev-medium',
+    LOW: 'bg-border text-foreground border-border',
+    INFO: 'bg-card text-muted-foreground border-border',
 };
 
 export const severityBar: Record<string, string> = {
@@ -32,12 +25,12 @@ export const severityBar: Record<string, string> = {
 export const severityLabel = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 const STATUS: Record<string, { label: string; badge: string }> = {
-    PENDING: { label: 'Pending', badge: 'text-sev-info bg-sev-info/10 border-sev-info/30' },
-    RUNNING: { label: 'Running', badge: 'text-primary bg-primary/10 border-primary/30' },
-    COMPLETED: { label: 'Completed', badge: 'text-success bg-success/10 border-success/30' },
-    FAILED: { label: 'Failed', badge: 'text-sev-critical bg-sev-critical/10 border-sev-critical/30' },
-    TIMED_OUT: { label: 'Timed out', badge: 'text-sev-high bg-sev-high/10 border-sev-high/30' },
-    INTERRUPTED: { label: 'Interrupted', badge: 'text-sev-medium bg-sev-medium/10 border-sev-medium/30' },
+    PENDING: { label: 'Pending', badge: 'bg-card text-muted-foreground border-border' },
+    RUNNING: { label: 'Running', badge: 'bg-border text-foreground border-border' },
+    COMPLETED: { label: 'Completed', badge: 'bg-sev-medium text-white border-sev-medium' },
+    FAILED: { label: 'Failed', badge: 'bg-sev-critical text-foreground border-sev-critical' },
+    TIMED_OUT: { label: 'Timed out', badge: 'bg-card text-foreground border-sev-critical' },
+    INTERRUPTED: { label: 'Interrupted', badge: 'bg-card text-foreground border-sev-critical' },
 };
 
 export const scanStatus = (status: string) => STATUS[status] ?? { label: status, badge: STATUS.PENDING.badge };
