@@ -21,7 +21,7 @@ async function tick() {
     for (const schedule of due) {
         let started = false;
         try {
-            await startScan(schedule.target, 'SCHEDULED');
+            await startScan(schedule.target, 'SCHEDULED', { ports: schedule.portSpec ?? undefined, udp: schedule.udp });
             started = true;
         } catch (error) {
             // Typically the concurrency limit or a target that no longer resolves.

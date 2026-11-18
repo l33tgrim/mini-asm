@@ -54,3 +54,11 @@ export function formatDuration(totalSeconds: number): string {
     const sec = (s % 60).toString().padStart(2, '0');
     return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${sec}` : `${m}:${sec}`;
 }
+
+/** Link to the schedules page with the form filled in from a scan. */
+export function scheduleHref(target: string, portSpec?: string | null, udp?: boolean): string {
+    const params = new URLSearchParams({ target });
+    if (portSpec) params.set('ports', portSpec);
+    if (udp === false) params.set('udp', '0');
+    return `/schedules?${params.toString()}`;
+}

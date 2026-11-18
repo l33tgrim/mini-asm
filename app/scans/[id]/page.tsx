@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Clock, Info, Play, RefreshCw, Search, Timer } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Clock, Info, Play, RefreshCw, Search, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
@@ -9,7 +9,7 @@ import { type Finding } from '@/components/FindingCard';
 import FindingGroupCard, { type DismissHandler } from '@/components/FindingGroupCard';
 import { groupFindings } from '@/lib/group-findings';
 import { ErrorBanner, StatusBadge } from '@/components/ui';
-import { SEVERITIES, apiError, formatDateTime, formatDuration, portLabel, severityBar, severityLabel } from '@/lib/ui';
+import { SEVERITIES, apiError, formatDateTime, formatDuration, portLabel, scheduleHref, severityBar, severityLabel } from '@/lib/ui';
 
 interface Scan {
     id: string;
@@ -171,7 +171,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         setError(null);
         try {
             if (action === 'RESCAN') {
-                const res = await axios.post('/api/scans', { target: scan.target });
+                const res = await axios.post('/api/scans', { target: scan.target, ports: scan.portSpec ?? undefined, udp: scan.udp });
                 router.push(`/scans/${res.data.id}`);
             } else {
                 await axios.post('/api/scans', { resumeId: scan.id });
@@ -265,6 +265,13 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden />
                         Rescan
                     </button>
+                    <Link
+                        href={scheduleHref(scan.target, scan.portSpec, scan.udp)}
+                        className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+                    >
+                        <CalendarClock className="h-4 w-4" aria-hidden />
+                        Schedule
+                    </Link>
                 </div>
             </div>
 

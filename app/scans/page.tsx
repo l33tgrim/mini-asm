@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from 'react';
-import { ScanSearch, Play, Search, Info, RefreshCw, ChevronRight, Activity, CheckCircle2, Loader2, ShieldAlert, ListChecks } from 'lucide-react';
+import { CalendarClock, ScanSearch, Play, Search, Info, RefreshCw, ChevronRight, Activity, CheckCircle2, Loader2, ShieldAlert, ListChecks } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import axios from 'axios';
 import { ErrorBanner, IconButton, PageHeader, StatCard, StatusBadge } from '@/components/ui';
-import { apiError, formatDateTime } from '@/lib/ui';
+import { apiError, formatDateTime, scheduleHref } from '@/lib/ui';
 import { DEFAULT_TCP_PORTS, PORT_PRESETS, parsePortSpec } from '@/lib/ports';
 
 const UDP_SERVICES = 'DNS 53, NTP 123, SNMP 161, SSDP 1900, SIP 5060, memcached 11211';
@@ -33,6 +33,8 @@ interface Scan {
     createdAt: string;
     totalIps: number;
     currentIndex: number;
+    portSpec?: string | null;
+    udp?: boolean;
     _count?: { findings: number };
 }
 
@@ -234,8 +236,8 @@ export default function ScansPage() {
                 ) : (
                     <ul className="divide-y divide-border">
                         {scans.map((scan) => (
-                            <li key={scan.id}>
-                                <Link href={`/scans/${scan.id}`} className="group flex items-center justify-between gap-4 px-6 py-3 transition-colors hover:bg-accent/40">
+                            <li key={scan.id} className="flex items-center transition-colors hover:bg-accent/40">
+                                <Link href={`/scans/${scan.id}`} className="group flex min-w-0 flex-1 items-center justify-between gap-4 py-3 pl-6 pr-2">
                                     <div className="min-w-0">
                                         <p className="truncate font-mono text-sm font-medium">{scan.target}</p>
                                         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -247,6 +249,14 @@ export default function ScansPage() {
                                         <StatusBadge status={scan.status} />
                                         <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
                                     </div>
+                                </Link>
+                                <Link
+                                    href={scheduleHref(scan.target, scan.portSpec, scan.udp)}
+                                    title={`Schedule recurring scans of ${scan.target}`}
+                                    aria-label={`Schedule recurring scans of ${scan.target}`}
+                                    className="mr-4 shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                >
+                                    <CalendarClock className="h-4 w-4" aria-hidden />
                                 </Link>
                             </li>
                         ))}

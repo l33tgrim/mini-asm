@@ -198,6 +198,14 @@ factor, so the evidence can be checked by hand. UDP findings show as `123/udp`.
 A rescan only closes ports that it checked again, so a narrow custom scan never
 marks ports outside its range as closed.
 
+### Scheduling from a scan
+
+Every finished scan has a Schedule button next to Rescan, and each row in the scan
+history has a calendar icon. Either one opens the Schedules page with the target,
+TCP ports and UDP setting already filled in, so only the frequency is left to pick.
+Schedules keep those port settings for every run, and Rescan and Run now reuse them
+too. `POST /api/schedules` takes the same `ports` and `udp` fields as `POST /api/scans`.
+
 ### Checking the network path first
 
 Some networks answer for every address: a router or firewall that hijacks DNS, a

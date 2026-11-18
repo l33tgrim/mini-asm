@@ -62,6 +62,8 @@ model Schedule {
   id        String   @id @default(cuid())
   target    String
   frequency String   // DAILY, WEEKLY, MONTHLY
+  portSpec  String?  // TCP ports for each run. Null means the default list
+  udp       Boolean  @default(true)
   nextRun   DateTime
   active    Boolean  @default(true)
   lastRun   DateTime?

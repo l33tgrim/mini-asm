@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { CalendarClock, CheckCircle2, Loader2, Pause, Play, Plus, RefreshCw, Target, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import { ErrorBanner, IconButton, PageHeader, StatCard } from '@/components/ui';
 import { apiError, formatDateTime } from '@/lib/ui';
@@ -14,6 +14,8 @@ interface Schedule {
     nextRun: string;
     lastRun: string | null;
     active: boolean;
+    portSpec?: string | null;
+    udp?: boolean;
 }
 
 const FREQUENCIES = [
@@ -33,9 +35,29 @@ function nextRunLabel(nextRun: string): string {
     return `In ${Math.floor(hours / 24)} days`;
 }
 
+/** What the scans run: "default ports, UDP probes" or "ports 22, 443". */
+function portsDetail(portSpec?: string | null, udp?: boolean): string {
+    return `${portSpec ? `ports ${portSpec}` : 'default ports'}${udp === false ? '' : ', UDP probes'}`;
+}
+
+// useSearchParams needs a Suspense boundary so the rest of the page can still be prerendered.
 export default function SchedulesPage() {
+    return (
+        <Suspense fallback={<p className="py-24 text-center text-sm text-muted-foreground">Loading schedules...</p>}>
+            <SchedulesView />
+        </Suspense>
+    );
+}
+
+function SchedulesView() {
     const router = useRouter();
-    const [target, setTarget] = useState('');
+    const params = useSearchParams();
+    // Filled in when arriving from a scan's Schedule button.
+    const fromScan = params.get('target') ?? '';
+    const [target, setTarget] = useState(fromScan);
+    const [ports, setPorts] = useState(params.get('ports') ?? '');
+    const [udp, setUdp] = useState(params.get('udp') !== '0');
+    const [prefilled, setPrefilled] = useState(fromScan !== '');
     const [frequency, setFrequency] = useState('DAILY');
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
@@ -68,8 +90,14 @@ export default function SchedulesPage() {
         setCreating(true);
         setFormError(null);
         try {
-            await axios.post('/api/schedules', { target: value, frequency });
+            await axios.post('/api/schedules', { target: value, frequency, ports: ports.trim() || undefined, udp });
             setTarget('');
+            setPorts('');
+            setUdp(true);
+            if (prefilled) {
+                setPrefilled(false);
+                router.replace('/schedules');
+            }
             await fetchSchedules();
         } catch (err) {
             setFormError(apiError(err, 'The schedule could not be created.'));
@@ -105,7 +133,7 @@ export default function SchedulesPage() {
     };
 
     const runNow = (s: Schedule) => withRow(s.id, `Could not start a scan of ${s.target}.`, async () => {
-        const res = await axios.post('/api/scans', { target: s.target });
+        const res = await axios.post('/api/scans', { target: s.target, ports: s.portSpec ?? undefined, udp: s.udp });
         router.push(`/scans/${res.data.id}`);
     });
 
@@ -130,6 +158,11 @@ export default function SchedulesPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <section className="h-fit rounded-2xl border border-border bg-card p-6">
                     <h2 className="text-sm font-semibold">New schedule</h2>
+                    {prefilled && (
+                        <p className="mt-3 rounded-xl border border-secondary bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                            Filled in from the scan of <span className="font-mono text-foreground">{fromScan}</span>. Pick how often it should run and create the schedule.
+                        </p>
+                    )}
                     <form onSubmit={handleCreate} className="mt-4 space-y-4">
                         <div>
                             <label htmlFor="schedule-target" className="mb-1.5 block text-xs font-medium text-muted-foreground">Target</label>
@@ -143,10 +176,30 @@ export default function SchedulesPage() {
                                     spellCheck={false}
                                     maxLength={253}
                                     value={target}
+                                    autoFocus={prefilled}
                                     onChange={(e) => setTarget(e.target.value)}
                                     className="w-full rounded-full border border-border bg-background py-2.5 pl-10 pr-4 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
                                 />
                             </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="schedule-ports" className="mb-1.5 block text-xs font-medium text-muted-foreground">TCP ports</label>
+                            <input
+                                id="schedule-ports"
+                                type="text"
+                                placeholder="Default list"
+                                autoComplete="off"
+                                spellCheck={false}
+                                maxLength={500}
+                                value={ports}
+                                onChange={(e) => setPorts(e.target.value)}
+                                className="w-full rounded-full border border-border bg-background px-4 py-2.5 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary"
+                            />
+                            <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                <input type="checkbox" checked={udp} onChange={(e) => setUdp(e.target.checked)} className="h-4 w-4 accent-[var(--color-primary)]" />
+                                Run the UDP service probes
+                            </label>
                         </div>
 
                         <fieldset>
@@ -201,7 +254,7 @@ export default function SchedulesPage() {
                                     <div className="min-w-0">
                                         <p className="truncate font-mono text-sm font-medium">{s.target}</p>
                                         <p className="mt-0.5 text-xs text-muted-foreground">
-                                            {frequencyDetail(s.frequency)}
+                                            {frequencyDetail(s.frequency)}, {portsDetail(s.portSpec, s.udp)}
                                             {s.active ? `. Next run: ${nextRunLabel(s.nextRun)}` : '. Paused'}
                                             {s.lastRun ? `. Last run: ${formatDateTime(s.lastRun)}` : ''}
                                         </p>
