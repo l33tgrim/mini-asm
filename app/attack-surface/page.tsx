@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, Crosshair, Flame, Globe, Loader2, Network, ScanSearch, Search, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Crosshair, Flame, Globe, Loader2, Network, RefreshCw, ScanSearch, Search, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { splitList, type Finding } from '@/components/FindingCard';
@@ -16,6 +16,15 @@ interface Host {
     domains: string[];
     techStack: string[];
     ports: { port: number; service: string | null; version: string | null; severity: string; description: string | null; issues: string[] }[];
+    closed: { port: number; service: string | null; closedAt: string }[];
+}
+
+interface RescanResult {
+    at: string;
+    open: number;
+    opened: number[];
+    closed: number[];
+    failed?: string;
 }
 
 interface Recon {
@@ -30,21 +39,38 @@ function groupByHost(findings: Finding[]): Host[] {
     for (const f of findings) {
         let host = hosts.get(f.ip);
         if (!host) {
-            host = { ip: f.ip, lastSeen: f.updatedAt, maxSeverity: 'INFO', domains: [], techStack: [], ports: [] };
+            host = { ip: f.ip, lastSeen: f.updatedAt, maxSeverity: 'INFO', domains: [], techStack: [], ports: [], closed: [] };
             hosts.set(f.ip, host);
         }
         const current = host;
         splitList(f.domains, ',').forEach((d) => { if (!current.domains.includes(d)) current.domains.push(d); });
         splitList(f.techStack, ',').forEach((t) => { if (!current.techStack.includes(t)) current.techStack.push(t); });
+        if (f.updatedAt > current.lastSeen) current.lastSeen = f.updatedAt;
+        if (f.closedAt) {
+            current.closed.push({ port: f.port, service: f.service, closedAt: f.closedAt });
+            continue;
+        }
         current.ports.push({ port: f.port, service: f.service, version: f.version, severity: f.severity, description: f.description, issues: splitList(f.vulnerability, ';') });
         if ((SEVERITY_RANK[f.severity] ?? 0) > (SEVERITY_RANK[current.maxSeverity] ?? 0)) current.maxSeverity = f.severity;
-        if (f.updatedAt > current.lastSeen) current.lastSeen = f.updatedAt;
     }
     return Array.from(hosts.values())
-        .map((h) => ({ ...h, ports: h.ports.sort((a, b) => a.port - b.port) }))
+        .map((h) => ({ ...h, ports: h.ports.sort((a, b) => a.port - b.port), closed: h.closed.sort((a, b) => a.port - b.port) }))
         .sort((a, b) =>
             (SEVERITY_RANK[b.maxSeverity] ?? 0) - (SEVERITY_RANK[a.maxSeverity] ?? 0) ||
             a.ip.localeCompare(b.ip, undefined, { numeric: true }));
+}
+
+const now = () => new Date().toISOString();
+
+/** Polls a scan until it stops running, for up to five minutes. Returns its last status. */
+async function waitForScan(id: string): Promise<string> {
+    const deadline = Date.now() + 5 * 60 * 1000;
+    let status = 'PENDING';
+    while (['PENDING', 'RUNNING'].includes(status) && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 1500));
+        status = (await axios.get(`/api/scans/${id}`)).data.status;
+    }
+    return status;
 }
 
 export default function AttackSurfacePage() {
@@ -57,22 +83,30 @@ export default function AttackSurfacePage() {
     const [scanning, setScanning] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<string | null>(null);
     const [testing, setTesting] = useState<{ target: string; ports: Host['ports'] } | null>(null);
+    const [rescanning, setRescanning] = useState<Set<string>>(new Set());
+    const [rescans, setRescans] = useState<Record<string, RescanResult>>({});
+
+    const load = async () => {
+        const findings: Finding[] = (await axios.get('/api/findings?closed=1')).data;
+        // 0.0.0.0 holds the DNS reconnaissance summary from the latest domain scan.
+        const summary = findings.find((f) => f.ip === '0.0.0.0');
+        if (summary) {
+            setRecon({
+                description: summary.description || '',
+                severity: summary.severity,
+                issues: splitList(summary.vulnerability, ';'),
+                forensics: summary.forensics || '',
+            });
+        }
+        const next = groupByHost(findings.filter((f) => f.ip !== '0.0.0.0'));
+        setHosts(next);
+        return next;
+    };
 
     useEffect(() => {
         (async () => {
             try {
-                const findings: Finding[] = (await axios.get('/api/findings')).data;
-                // 0.0.0.0 holds the DNS reconnaissance summary from the latest domain scan.
-                const summary = findings.find((f) => f.ip === '0.0.0.0');
-                if (summary) {
-                    setRecon({
-                        description: summary.description || '',
-                        severity: summary.severity,
-                        issues: splitList(summary.vulnerability, ';'),
-                        forensics: summary.forensics || '',
-                    });
-                }
-                setHosts(groupByHost(findings.filter((f) => f.ip !== '0.0.0.0')));
+                await load();
             } catch (e) {
                 setError(apiError(e, 'Could not load the attack surface.'));
             } finally {
@@ -80,6 +114,30 @@ export default function AttackSurfacePage() {
             }
         })();
     }, []);
+
+    /** Rescans one IP on the page and reports which ports opened or closed since the last look. */
+    const rescanHost = async (ip: string) => {
+        const before = new Set(hosts.find((h) => h.ip === ip)?.ports.map((p) => p.port) ?? []);
+        setRescanning((s) => new Set(s).add(ip));
+        setRescans((r) => { const rest = { ...r }; delete rest[ip]; return rest; });
+        let result: RescanResult;
+        try {
+            const { id } = (await axios.post('/api/scans', { target: ip })).data;
+            const status = await waitForScan(id);
+            if (status !== 'COMPLETED') throw new Error(status === 'PENDING' || status === 'RUNNING' ? 'The rescan is taking longer than expected. Check Scans for progress.' : `The rescan ended as ${status.toLowerCase()}.`);
+            const after = new Set((await load()).find((h) => h.ip === ip)?.ports.map((p) => p.port) ?? []);
+            result = {
+                at: now(),
+                open: after.size,
+                opened: [...after].filter((p) => !before.has(p)).sort((a, b) => a - b),
+                closed: [...before].filter((p) => !after.has(p)).sort((a, b) => a - b),
+            };
+        } catch (e) {
+            result = { at: now(), open: before.size, opened: [], closed: [], failed: e instanceof Error && !axios.isAxiosError(e) ? e.message : apiError(e, 'The rescan could not start.') };
+        }
+        setRescans((r) => ({ ...r, [ip]: result }));
+        setRescanning((s) => { const n = new Set(s); n.delete(ip); return n; });
+    };
 
     const startScan = async (target: string) => {
         setScanning(target);
@@ -176,6 +234,8 @@ export default function AttackSurfacePage() {
                     filteredHosts.map((host) => {
                         const isOpen = expanded === host.ip;
                         const issueCount = host.ports.reduce((a, p) => a + p.issues.length, 0);
+                        const busy = rescanning.has(host.ip);
+                        const result = rescans[host.ip];
                         return (
                             <article key={host.ip} className="flex overflow-hidden rounded-2xl border border-border bg-card">
                                 <div className={`w-1 shrink-0 ${severityBar[host.maxSeverity] ?? severityBar.INFO}`} aria-hidden />
@@ -221,15 +281,33 @@ export default function AttackSurfacePage() {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => startScan(host.ip)}
-                                            disabled={scanning !== null}
+                                            onClick={() => rescanHost(host.ip)}
+                                            disabled={busy}
                                             aria-label={`Rescan ${host.ip}`}
-                                            title="Rescan this host"
-                                            className="shrink-0 rounded-full border border-border p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                                            title="Rescan the ports on this IP and update the card"
+                                            className="flex shrink-0 items-center gap-1.5 rounded-full border border-border p-2 text-xs font-medium text-muted-foreground transition-colors hover:border-secondary hover:bg-accent hover:text-foreground disabled:opacity-60 sm:px-3"
                                         >
-                                            {scanning === host.ip ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanSearch className="h-4 w-4" />}
+                                            <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} aria-hidden />
+                                            <span className="hidden sm:inline">{busy ? 'Rescanning' : 'Rescan'}</span>
                                         </button>
                                     </div>
+
+                                    {(busy || result) && (
+                                        <div role="status" className="-mt-1 px-4 pb-3 text-xs text-muted-foreground">
+                                            {busy ? (
+                                                <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Checking {host.ip}. This usually takes under a minute.</span>
+                                            ) : result?.failed ? (
+                                                <span className="text-sev-critical">{result.failed}</span>
+                                            ) : result && (
+                                                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                                    <span>Rescanned {formatDateTime(result.at)}: {result.open} open</span>
+                                                    {result.opened.length > 0 && <span className="font-medium text-foreground">Newly open: {result.opened.join(', ')}</span>}
+                                                    {result.closed.length > 0 && <span>Now closed: {result.closed.join(', ')}</span>}
+                                                    {result.opened.length === 0 && result.closed.length === 0 && <span>No change</span>}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {isOpen && (
                                         <div className="space-y-4 border-t border-border bg-background/40 p-4">
@@ -276,6 +354,11 @@ export default function AttackSurfacePage() {
 
                                             <div>
                                                 <p className="mb-2 text-xs font-semibold text-muted-foreground">Open services</p>
+                                                {host.ports.length === 0 && (
+                                                    <p className="rounded-lg border border-dashed border-border bg-card p-3 text-xs text-muted-foreground">
+                                                        No ports answered on the last scan. The host may be down, or a firewall may be dropping the probes.
+                                                    </p>
+                                                )}
                                                 <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
                                                     {host.ports.map((p) => (
                                                         <li key={p.port} className="p-3">
@@ -304,6 +387,19 @@ export default function AttackSurfacePage() {
                                                     ))}
                                                 </ul>
                                             </div>
+
+                                            {host.closed.length > 0 && (
+                                                <div>
+                                                    <p className="mb-2 text-xs font-semibold text-muted-foreground">Closed since an earlier scan</p>
+                                                    <ul className="flex flex-wrap gap-1.5">
+                                                        {host.closed.map((p) => (
+                                                            <li key={p.port} title={`Not answering since ${formatDateTime(p.closedAt)}`} className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+                                                                <span className="font-mono">{p.port}</span> {p.service || 'Unknown'}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
 
                                             <p className="text-xs text-muted-foreground">Last seen {formatDateTime(host.lastSeen)}</p>
                                         </div>

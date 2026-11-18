@@ -20,6 +20,7 @@ export interface Finding {
     upstreamVersion: string | null;
     domains: string | null;
     techStack: string | null;
+    closedAt?: string | null;
     updatedAt: string;
 }
 

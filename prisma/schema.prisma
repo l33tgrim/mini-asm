@@ -44,6 +44,7 @@ model Finding {
   discoveryMethod  String?   @default("ACTIVE_PROBE")
   domains          String?   // Comma separated list of domains
   techStack        String?   // Detected technologies
+  closedAt         DateTime? // Set when a later scan of the host found the port no longer answering
 
   // Many-to-many relationship with scans
   scans         Scan[]

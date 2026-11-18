@@ -46,6 +46,7 @@ async function saveFinding(scanId: string, f: ScanResult, extraDomains: string[]
         upstreamVersion: f.upstreamVersion ?? null,
         domains: Array.from(domainSet).join(',') || null,
         techStack: f.techStack ?? null,
+        closedAt: null,
         scans: { connect: { id: scanId } },
     };
 
@@ -53,6 +54,15 @@ async function saveFinding(scanId: string, f: ScanResult, extraDomains: string[]
         where: { ip_port: { ip: f.ip, port: f.port } },
         update: data,
         create: { ip: f.ip, port: f.port, ...data },
+    });
+}
+
+/** Marks every known port on the host that was not in this scan's results as closed. */
+export async function markClosed(ip: string, openPorts: number[]) {
+    await prisma.finding.updateMany({
+        // Port 0 is the DNS reconnaissance pseudo finding, not a service.
+        where: { ip, closedAt: null, port: { notIn: [0, ...openPorts] } },
+        data: { closedAt: new Date() },
     });
 }
 
@@ -79,8 +89,10 @@ async function runScan(scanId: string) {
         const hostnames = mappings[ip] || [];
 
         let results: ScanResult[] = [];
+        let scanned = false;
         try {
             results = await scanIp(ip, hostnames[0]);
+            scanned = true;
         } catch (error) {
             // One unreachable host must not abort the whole scan.
             console.error(`[scan ${scanId}] error scanning ${ip}:`, error);
@@ -92,6 +104,14 @@ async function runScan(scanId: string) {
             } catch (error) {
                 console.error(`[scan ${scanId}] could not save ${finding.ip}:${finding.port}:`, error);
             }
+        }
+
+        // Ports seen before that did not answer this time are marked closed rather than
+        // deleted, so the history stays and they come back if they open again.
+        if (scanned) {
+            await markClosed(ip, results.map((r) => r.port)).catch((error) => {
+                console.error(`[scan ${scanId}] could not mark closed ports on ${ip}:`, error);
+            });
         }
 
         await prisma.scan.update({ where: { id: scanId }, data: { currentIndex: i + 1 } });
