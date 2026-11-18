@@ -1,11 +1,13 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Clock, Play, RefreshCw, Search, Timer } from 'lucide-react';
+import { ArrowLeft, Clock, Info, Play, RefreshCw, Search, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
-import FindingCard, { type Finding } from '@/components/FindingCard';
+import { type Finding } from '@/components/FindingCard';
+import FindingGroupCard from '@/components/FindingGroupCard';
+import { groupFindings } from '@/lib/group-findings';
 import { ErrorBanner, StatusBadge } from '@/components/ui';
 import { SEVERITIES, apiError, formatDateTime, formatDuration, portLabel, severityBar, severityLabel } from '@/lib/ui';
 
@@ -18,6 +20,7 @@ interface Scan {
     totalIps: number;
     portSpec?: string | null;
     udp?: boolean;
+    pathNote?: string | null;
     startedAt: string | null;
     completedAt: string | null;
     createdAt: string;
@@ -57,8 +60,40 @@ function ChangeList({ title, items, highlight }: { title: string; items: string[
     );
 }
 
+function ServiceChanges({ title, items, highlight }: { title: string; items: ServiceRef[]; highlight?: boolean }) {
+    if (items.length === 0) return null;
+    const groups = new Map<string, { label: string; ips: string[] }>();
+    for (const s of items) {
+        const label = `${portLabel(s.port, s.protocol)}${s.service ? ` ${s.service}` : ''}`;
+        const g = groups.get(label);
+        if (g) g.ips.push(s.ip); else groups.set(label, { label, ips: [s.ip] });
+    }
+    const list = [...groups.values()].sort((a, b) => b.ips.length - a.ips.length);
+    return (
+        <div>
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className={`h-2 w-2 rounded-full ${highlight ? 'bg-sev-critical' : 'bg-sev-low'}`} aria-hidden />
+                {title} ({list.length})
+            </p>
+            <ul className="mt-2 space-y-1">
+                {list.map((g) => (
+                    <li key={g.label} className="font-mono text-xs">
+                        {g.ips.length === 1 ? (
+                            <span className="break-all">{g.ips[0]}:{g.label}</span>
+                        ) : (
+                            <details>
+                                <summary className="cursor-pointer">{g.label} <span className="text-muted-foreground">on {g.ips.length} hosts</span></summary>
+                                <p className="mt-1 max-h-40 overflow-y-auto break-words pl-3 text-muted-foreground">{g.ips.join(', ')}</p>
+                            </details>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
 function ChangesPanel({ changes }: { changes: Changes }) {
-    const service = (s: ServiceRef) => `${s.ip}:${portLabel(s.port, s.protocol)}${s.service ? ` ${s.service}` : ''}`;
     return (
         <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -71,9 +106,9 @@ function ChangesPanel({ changes }: { changes: Changes }) {
                 <p className="mt-3 text-sm text-muted-foreground">Nothing changed. The same hosts and services are exposed.</p>
             ) : (
                 <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-                    <ChangeList title="New services" items={changes.newServices.map(service)} highlight />
+                    <ServiceChanges title="New services" items={changes.newServices} highlight />
                     <ChangeList title="New hostnames" items={changes.newHosts} highlight />
-                    <ChangeList title="Closed services" items={changes.closedServices.map(service)} />
+                    <ServiceChanges title="Closed services" items={changes.closedServices} />
                     <ChangeList title="Hostnames gone" items={changes.removedHosts} />
                 </div>
             )}
@@ -163,6 +198,9 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
     const q = filter.trim().toLowerCase();
     const filteredFindings = scan.findings.filter((f) =>
         !q || [f.ip, String(f.port), portLabel(f.port, f.protocol), f.service, f.description, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)));
+    const groups = groupFindings(filteredFindings);
+    const allGroups = groupFindings(scan.findings);
+    const hostCount = new Set(scan.findings.map((f) => f.ip)).size;
 
     const progress = scan.totalIps > 0 ? Math.round((scan.currentIndex / scan.totalIps) * 100) : 0;
     const started = scan.startedAt ? new Date(scan.startedAt).getTime() : null;
@@ -241,6 +279,13 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                 </section>
             )}
 
+            {scan.pathNote && (
+                <p className="flex gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden />
+                    <span>{scan.pathNote}</span>
+                </p>
+            )}
+
             {scan.changes && <ChangesPanel changes={scan.changes} />}
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
@@ -250,12 +295,16 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         {SEVERITIES.map((sev) => (
                             <div key={sev} className="flex items-center justify-between">
                                 <dt className="flex items-center gap-2 text-sm"><span className={`h-2.5 w-2.5 rounded-full ${severityBar[sev]}`} aria-hidden />{severityLabel(sev)}</dt>
-                                <dd className="text-sm font-semibold tabular-nums">{scan.findings.filter((f) => f.severity === sev).length}</dd>
+                                <dd className="text-sm font-semibold tabular-nums">{allGroups.filter((g) => g.severity === sev).length}</dd>
                             </div>
                         ))}
                         <div className="flex items-center justify-between border-t border-border pt-3">
                             <dt className="text-sm text-muted-foreground">Total</dt>
-                            <dd className="text-sm font-semibold tabular-nums">{scan.findings.length}</dd>
+                            <dd className="text-sm font-semibold tabular-nums">{allGroups.length}</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <dt className="text-sm text-muted-foreground">Hosts affected</dt>
+                            <dd className="text-sm font-semibold tabular-nums">{hostCount}</dd>
                         </div>
                     </dl>
                 </aside>
@@ -273,7 +322,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         />
                     </div>
 
-                    {filteredFindings.map((finding) => <FindingCard key={finding.id} finding={finding} />)}
+                    {groups.map((group) => <FindingGroupCard key={group.key} group={group} />)}
 
                     {filteredFindings.length === 0 && (
                         <p className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">

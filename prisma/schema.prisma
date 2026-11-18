@@ -18,6 +18,7 @@ model Scan {
   hostMap        String?   // JSON map of IP -> hostnames, kept so a resumed scan has the same context
   portSpec       String?   // TCP ports as typed, e.g. "default, 8000-8100". Null means the default list
   udp            Boolean   @default(true) // Run the UDP service probes as well
+  pathNote       String?   // Ports skipped because the network path answers them for any address
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime  @default(now())

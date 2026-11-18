@@ -584,8 +584,22 @@ export const UDP_PROBES = [
 ];
 export const UDP_PROBE_PORTS = UDP_PROBES.map((p) => p.port);
 
+/**
+ * An address from TEST-NET-1 (RFC 5737). It is never routed on the internet, so nothing
+ * there can answer. A reply from it means a router, firewall or proxy on the path is
+ * answering for every address, and results on that port prove nothing about the target.
+ */
+export const CONTROL_IP = '192.0.2.1';
+
+/** UDP ports where the control address answered, so the path intercepts that protocol. */
+export async function interceptedUdpPorts(control = CONTROL_IP, timeout = 2000): Promise<number[]> {
+    const hits = await Promise.all(UDP_PROBES.map((p) => p.run(control, p.port, timeout).then((r) => (r ? p.port : null)).catch(() => null)));
+    return hits.filter((p): p is number => p !== null);
+}
+
 /** Runs every UDP probe against one host. Ports that stay silent produce no finding. */
-export async function probeUdp(ip: string, timeout = 2000): Promise<UdpFinding[]> {
-    const results = await Promise.all(UDP_PROBES.map((p) => p.run(ip, p.port, timeout).catch(() => null)));
+export async function probeUdp(ip: string, timeout = 2000, skip: number[] = []): Promise<UdpFinding[]> {
+    const probes = UDP_PROBES.filter((p) => !skip.includes(p.port));
+    const results = await Promise.all(probes.map((p) => p.run(ip, p.port, timeout).catch(() => null)));
     return results.filter((r): r is UdpFinding => r !== null);
 }

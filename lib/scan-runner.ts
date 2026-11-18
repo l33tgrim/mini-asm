@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { getTargetIps, scanIp, UDP_PROBE_PORTS, type ScanResult, type TargetResolution } from './scanner';
+import { checkPath, describePathCheck, getTargetIps, type PathCheck, scanIp, UDP_PROBE_PORTS, type ScanResult, type TargetResolution } from './scanner';
 import { MAX_PROBES_PER_SCAN, parsePortSpec, PortSpecError } from './ports';
 
 export const MAX_CONCURRENT_SCANS = 3;
@@ -109,12 +109,19 @@ async function runScan(scanId: string) {
     const ips = parseJson<string[]>(scan.ipList, []);
     const mappings = parseJson<Record<string, string[]>>(scan.hostMap, {});
     const startTime = Date.now();
-    const ports = parsePortSpec(scan.portSpec);
+    const requested = parsePortSpec(scan.portSpec);
 
     await prisma.scan.update({
         where: { id: scanId },
         data: { status: 'RUNNING', startedAt: scan.startedAt ?? new Date(), completedAt: null },
     });
+
+    // Ports the network path answers for any address are left out, otherwise every host
+    // in the range would show them open. Findings on those ports are closed below, since
+    // they cannot be told apart from the interception.
+    const path: PathCheck = await checkPath(requested, scan.udp).catch(() => ({ tcp: [], udp: [] }));
+    const ports = requested.filter((p) => !path.tcp.includes(p));
+    await prisma.scan.update({ where: { id: scanId }, data: { pathNote: describePathCheck(path) } });
 
     for (let i = scan.currentIndex; i < ips.length; i++) {
         if (Date.now() - startTime > SCAN_TIMEOUT_MS) {
@@ -128,7 +135,7 @@ async function runScan(scanId: string) {
         let results: ScanResult[] = [];
         let scanned = false;
         try {
-            results = await scanIp(ip, hostnames[0], { ports, udp: scan.udp });
+            results = await scanIp(ip, hostnames[0], { ports, udp: scan.udp, skipUdp: path.udp });
             scanned = true;
         } catch (error) {
             // One unreachable host must not abort the whole scan.
@@ -148,7 +155,7 @@ async function runScan(scanId: string) {
         if (scanned) {
             const openOn = (protocol: string) => results.filter((r) => (r.protocol ?? 'tcp') === protocol).map((r) => r.port);
             await Promise.all([
-                markClosed(ip, 'tcp', ports, openOn('tcp')),
+                markClosed(ip, 'tcp', requested, openOn('tcp')),
                 scan.udp ? markClosed(ip, 'udp', UDP_PROBE_PORTS, openOn('udp')) : null,
             ]).catch((error) => {
                 console.error(`[scan ${scanId}] could not mark closed ports on ${ip}:`, error);

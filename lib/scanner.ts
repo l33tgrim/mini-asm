@@ -9,7 +9,7 @@ import {
 } from './discovery';
 
 import { portMeta, DEFAULT_TCP_PORTS } from './ports';
-import { probeUdp } from './udp';
+import { CONTROL_IP, interceptedUdpPorts, probeUdp } from './udp';
 import type { Severity } from './ports';
 
 export type { Severity };
@@ -710,6 +710,40 @@ export interface ScanOptions {
     ports?: number[];
     /** Also run the UDP service probes (NTP, SNMP, DNS, SIP, SSDP, memcached). */
     udp?: boolean;
+    /** UDP ports to leave out, because the network path answers them for any address. */
+    skipUdp?: number[];
+}
+
+export interface PathCheck {
+    tcp: number[];
+    udp: number[];
+}
+
+/**
+ * Sends the same checks to an address nothing can answer (see CONTROL_IP). Ports that
+ * answer anyway are intercepted somewhere between the scanner and the internet, for
+ * example a firewall that hijacks DNS or a proxy that accepts every connection on 80
+ * and 443. Run once per scan; scanning those ports would report every host as open.
+ */
+export async function checkPath(ports: number[], udp: boolean, control = CONTROL_IP): Promise<PathCheck> {
+    const tcp: number[] = [];
+    const [udpHits] = await Promise.all([
+        udp ? interceptedUdpPorts(control) : Promise.resolve([]),
+        pool(ports, CONNECT_CONCURRENCY, async (port) => { if (await checkPort(control, port, 1500)) tcp.push(port); }),
+    ]);
+    return { tcp: tcp.sort((a, b) => a - b), udp: udpHits };
+}
+
+/** One line for the scan page explaining which ports were left out and why. */
+export function describePathCheck(check: PathCheck): string | null {
+    const parts = [
+        check.tcp.length ? `TCP ${check.tcp.join(', ')}` : '',
+        check.udp.length ? `UDP ${check.udp.join(', ')}` : '',
+    ].filter(Boolean);
+    if (!parts.length) return null;
+    return `Skipped ${parts.join(' and ')}: the network between the scanner and the internet answers these ports for any address ` +
+        `(a test against ${CONTROL_IP}, which nothing can answer, got a reply). Results there would show every host as open. ` +
+        'This is usually a firewall or router that intercepts DNS, or a web proxy. Run the scan from a network without it to check these ports.';
 }
 
 /** How many TCP connects run at once against one host. */
@@ -725,7 +759,7 @@ export async function scanIp(ip: string, hostname?: string, options: ScanOptions
     const open: number[] = [];
     const [ptrRecords, udp] = await Promise.all([
         reverseDns(ip),
-        options.udp ? probeUdp(ip).catch(() => []) : Promise.resolve([]),
+        options.udp ? probeUdp(ip, 2000, options.skipUdp).catch(() => []) : Promise.resolve([]),
         pool(ports, CONNECT_CONCURRENCY, async (port) => { if (await checkPort(ip, port)) open.push(port); }),
     ]);
     const tcp = await Promise.all(open.sort((a, b) => a - b).map((port) => probePort(ip, port, hostname, ptrRecords).catch(() => null)));

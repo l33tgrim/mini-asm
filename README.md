@@ -166,6 +166,25 @@ factor, so the evidence can be checked by hand. UDP findings show as `123/udp`.
 A rescan only closes ports that it checked again, so a narrow custom scan never
 marks ports outside its range as closed.
 
+### Checking the network path first
+
+Some networks answer for every address: a router or firewall that hijacks DNS, a
+transparent web proxy on 80 and 443, or the network layer of Docker Desktop. A scan
+from behind one of those would report the same port open on every IP. Before each
+scan the scanner sends the same TCP connects and UDP probes to 192.0.2.1, a
+documentation address that nothing on the internet can answer. Any port that gets a
+reply there is skipped for the whole scan, the scan page says which ports and why,
+and findings that earlier scans recorded on those ports are closed.
+
+### Grouped findings
+
+The scan page and the Findings page show one card per issue (service, port and
+severity), the way a risk register lists "SNMP port open" once with the assets it
+affects. The card shows the issue, how many hosts have it and the recommended
+action. Opening "Affected hosts" lists every IP, and each IP opens to its own
+evidence and banner. The changes panel groups new and closed services the same way.
+The CSV export stays one row per host and port.
+
 For a domain the mapping follows what an outside attacker would do:
 
 - DNS records: A, AAAA, NS, MX, SRV, SPF, DMARC and common DKIM selectors.

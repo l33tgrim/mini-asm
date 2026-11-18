@@ -86,7 +86,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             where: { id },
             // ipList and hostMap are internal working data and can be large, so they are left out.
             select: {
-                id: true, target: true, status: true, type: true, currentIndex: true, totalIps: true, portSpec: true, udp: true,
+                id: true, target: true, status: true, type: true, currentIndex: true, totalIps: true, portSpec: true, udp: true, pathNote: true,
                 startedAt: true, completedAt: true, createdAt: true, findings: true,
             },
         });
