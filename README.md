@@ -185,6 +185,18 @@ action. Opening "Affected hosts" lists every IP, and each IP opens to its own
 evidence and banner. The changes panel groups new and closed services the same way.
 The CSV export stays one row per host and port.
 
+The control address test misses interception when the router drops traffic to
+192.0.2.1 instead of answering it. So after a scan of 16 or more addresses, any port
+that answered on at least 90% of them gets a note on the scan page as well.
+
+### False positives
+
+Any finding card can be marked as a false positive, with an optional reason. That
+hides it on every host in the card, takes it out of the counts and the dashboard,
+and keeps it hidden when later scans see the port again. The Findings page has a
+"False positives" view and the scan page a collapsed section, where each one can be
+restored. Both actions go to the audit log.
+
 For a domain the mapping follows what an outside attacker would do:
 
 - DNS records: A, AAAA, NS, MX, SRV, SPF, DMARC and common DKIM selectors.

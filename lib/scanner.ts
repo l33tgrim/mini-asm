@@ -746,6 +746,24 @@ export function describePathCheck(check: PathCheck): string | null {
         'This is usually a firewall or router that intercepts DNS, or a web proxy. Run the scan from a network without it to check these ports.';
 }
 
+/**
+ * A port that answers on nearly every address of a range is far more likely to be
+ * something on the network path than a real service on each host. The control
+ * address test misses it when the router drops traffic to 192.0.2.1 instead of
+ * answering, so this looks at the results themselves. Nothing is hidden: the scan
+ * page shows the note and the findings can be marked as false positives.
+ */
+export function describeUniformPorts(hostsPerPort: Record<string, number>, scannedIps: number, minRange = 16, share = 0.9): string | null {
+    if (scannedIps < minRange) return null;
+    const suspect = Object.entries(hostsPerPort)
+        .filter(([, hosts]) => hosts >= scannedIps * share)
+        .map(([port, hosts]) => `${port} (${hosts} of ${scannedIps} addresses)`);
+    if (!suspect.length) return null;
+    return `${suspect.join(', ')} answered on almost every address in the range. Real networks rarely look like that, ` +
+        'so this is probably a router, firewall or proxy answering for every address. Check one of the hosts from another network, ' +
+        'and if it is not real, open the finding and mark it as a false positive.';
+}
+
 /** How many TCP connects run at once against one host. */
 const CONNECT_CONCURRENCY = 100;
 

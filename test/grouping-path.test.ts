@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'net';
 import { groupFindings, type GroupableFinding } from '../lib/group-findings';
-import { checkPath, describePathCheck } from '../lib/scanner';
+import { checkPath, describePathCheck, describeUniformPorts } from '../lib/scanner';
 
 const f = (ip: string, over: Partial<GroupableFinding> = {}): GroupableFinding => ({
     id: `${ip}-${over.port ?? 53}-${over.protocol ?? 'udp'}`, ip, port: 53, protocol: 'udp', service: 'DNS', severity: 'HIGH',
@@ -45,4 +45,16 @@ test('the path check flags ports the control address answers', async () => {
     } finally {
         server.close();
     }
+});
+
+test('describeUniformPorts flags a port that answers on almost every address', () => {
+    const note = describeUniformPorts({ '53/udp': 253, '22/tcp': 3 }, 254);
+    assert.ok(note);
+    assert.match(note, /53\/udp \(253 of 254 addresses\)/);
+    assert.doesNotMatch(note, /22\/tcp/);
+});
+
+test('describeUniformPorts stays quiet on small ranges and normal results', () => {
+    assert.equal(describeUniformPorts({ '53/udp': 4 }, 4), null);
+    assert.equal(describeUniformPorts({ '443/tcp': 120 }, 254), null);
 });

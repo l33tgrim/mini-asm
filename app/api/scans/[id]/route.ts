@@ -44,7 +44,7 @@ async function changesSincePrevious(scan: { id: string; target: string; status: 
     const previous = await prisma.scan.findFirst({
         where: { target: scan.target, status: 'COMPLETED', createdAt: { lt: scan.createdAt } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, createdAt: true, hostMap: true, portSpec: true, udp: true, findings: { select: { ip: true, port: true, protocol: true, service: true } } },
+        select: { id: true, createdAt: true, hostMap: true, portSpec: true, udp: true, findings: { where: { dismissedAt: null }, select: { ip: true, port: true, protocol: true, service: true } } },
     });
     if (!previous) return null;
 
@@ -97,7 +97,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             a.ip.localeCompare(b.ip, undefined, { numeric: true }) ||
             a.port - b.port,
         );
-        return NextResponse.json({ ...scan, changes: await changesSincePrevious(scan) });
+        // False positives are returned so the page can offer to restore them, but they
+        // do not count as changes.
+        const changes = await changesSincePrevious({ ...scan, findings: scan.findings.filter((f) => !f.dismissedAt) });
+        return NextResponse.json({ ...scan, changes });
     } catch (error) {
         return handleError('GET /api/scans/[id]', error);
     }

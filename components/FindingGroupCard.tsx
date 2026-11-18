@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ChevronDown, EyeOff, RotateCcw, ShieldCheck } from 'lucide-react';
 import { SeverityBadge } from '@/components/ui';
 import { splitList, type Finding } from '@/components/FindingCard';
 import type { FindingGroup } from '@/lib/group-findings';
@@ -55,15 +55,82 @@ function HostRow({ finding }: { finding: Finding }) {
     );
 }
 
+export type DismissHandler = (ids: string[], restore: boolean, reason?: string) => Promise<void>;
+
+/** Marks every host in the group as a false positive, or restores them. */
+function DismissControl({ group, onDismiss, dismissed }: { group: FindingGroup<Finding>; onDismiss: DismissHandler; dismissed: boolean }) {
+    const [asking, setAsking] = useState(false);
+    const [reason, setReason] = useState('');
+    const [busy, setBusy] = useState(false);
+    const ids = group.findings.map((f) => f.id);
+    const run = async (restore: boolean) => {
+        setBusy(true);
+        try {
+            await onDismiss(ids, restore, reason);
+            setAsking(false);
+        } finally {
+            setBusy(false);
+        }
+    };
+    const button = 'flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50';
+
+    if (dismissed) {
+        return (
+            <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground sm:px-5">
+                <span className="min-w-0 flex-1">
+                    Marked as a false positive{group.findings[0].dismissedAt ? ` on ${formatDateTime(group.findings[0].dismissedAt)}` : ''}
+                    {group.findings[0].dismissReason ? `: ${group.findings[0].dismissReason}` : ''}
+                </span>
+                <button type="button" onClick={() => run(true)} disabled={busy} className={button}>
+                    <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Restore
+                </button>
+            </div>
+        );
+    }
+    if (!asking) {
+        return (
+            <div className="flex justify-end border-t border-border px-4 py-2.5 sm:px-5">
+                <button type="button" onClick={() => setAsking(true)} className={`${button} text-muted-foreground`}>
+                    <EyeOff className="h-3.5 w-3.5" aria-hidden /> Mark as false positive
+                </button>
+            </div>
+        );
+    }
+    return (
+        <form
+            onSubmit={(e) => { e.preventDefault(); run(false); }}
+            className="space-y-2 border-t border-border px-4 py-3 sm:px-5"
+        >
+            <label className="block text-xs font-medium" htmlFor={`reason-${group.key}`}>
+                Hide this finding on {ids.length === 1 ? 'this host' : `all ${ids.length} hosts`}? Later scans keep it hidden. You can restore it from the false positives view.
+            </label>
+            <input
+                id={`reason-${group.key}`}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                maxLength={500}
+                placeholder="Reason (optional), for example: router answers DNS for every address"
+                className="w-full rounded-full border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary"
+            />
+            <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setAsking(false)} className={button}>Cancel</button>
+                <button type="submit" disabled={busy} className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+                    Mark as false positive
+                </button>
+            </div>
+        </form>
+    );
+}
+
 /** One card per issue. The affected hosts are listed only when the card is opened. */
-export default function FindingGroupCard({ group }: { group: FindingGroup<Finding> }) {
+export default function FindingGroupCard({ group, onDismiss, dismissed = false }: { group: FindingGroup<Finding>; onDismiss?: DismissHandler; dismissed?: boolean }) {
     const [open, setOpen] = useState(false);
     const total = group.findings.length;
     const share = (hosts: number) => (total > 1 && hosts < total ? ` (${hosts} of ${total} hosts)` : '');
     const panelId = `group-${group.key.replace(/[^a-z0-9]/gi, '-')}`;
 
     return (
-        <article className="flex overflow-hidden rounded-2xl border border-border bg-card">
+        <article className={`flex overflow-hidden rounded-2xl border border-border bg-card ${dismissed ? 'opacity-75' : ''}`}>
             <div className={`w-1 shrink-0 ${severityBar[group.severity] ?? severityBar.INFO}`} aria-hidden />
             <div className="min-w-0 flex-1">
                 <div className="p-4 sm:p-5">
@@ -125,6 +192,7 @@ export default function FindingGroupCard({ group }: { group: FindingGroup<Findin
                         {group.findings.map((f) => <HostRow key={f.id} finding={f} />)}
                     </ul>
                 )}
+                {onDismiss && <DismissControl group={group} onDismiss={onDismiss} dismissed={dismissed} />}
             </div>
         </article>
     );

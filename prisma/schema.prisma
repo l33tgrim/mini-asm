@@ -49,6 +49,8 @@ model Finding {
   domains          String?   // Comma separated list of domains
   techStack        String?   // Detected technologies
   closedAt         DateTime? // Set when a later scan of the host found the port no longer answering
+  dismissedAt      DateTime? // Marked as a false positive: hidden everywhere and kept hidden on later scans
+  dismissReason    String?
 
   // Many-to-many relationship with scans
   scans         Scan[]

@@ -22,7 +22,7 @@ export async function GET() {
         const scans = await prisma.scan.findMany({
             orderBy: { createdAt: 'desc' },
             take: 200,
-            select: { ...scanSummary, _count: { select: { findings: true } } },
+            select: { ...scanSummary, _count: { select: { findings: { where: { dismissedAt: null } } } } },
         });
         return NextResponse.json(scans);
     } catch (error) {

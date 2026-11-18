@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { checkPath, describePathCheck, getTargetIps, type PathCheck, scanIp, UDP_PROBE_PORTS, type ScanResult, type TargetResolution } from './scanner';
+import { checkPath, describePathCheck, describeUniformPorts, getTargetIps, type PathCheck, scanIp, UDP_PROBE_PORTS, type ScanResult, type TargetResolution } from './scanner';
 import { MAX_PROBES_PER_SCAN, parsePortSpec, PortSpecError } from './ports';
 
 export const MAX_CONCURRENT_SCANS = 3;
@@ -165,9 +165,21 @@ async function runScan(scanId: string) {
         await prisma.scan.update({ where: { id: scanId }, data: { currentIndex: i + 1 } });
     }
 
+    const linked = await prisma.finding.findMany({
+        where: { scans: { some: { id: scanId } }, port: { not: 0 } },
+        select: { ip: true, port: true, protocol: true },
+    });
+    const hostsPerPort: Record<string, number> = {};
+    for (const f of linked) {
+        const label = `${f.port}/${f.protocol}`;
+        hostsPerPort[label] = (hostsPerPort[label] ?? 0) + 1;
+    }
+    const uniform = describeUniformPorts(hostsPerPort, ips.length);
+    const pathNote = [describePathCheck(path), uniform].filter(Boolean).join('\n\n') || null;
+
     await prisma.scan.update({
         where: { id: scanId },
-        data: { status: 'COMPLETED', completedAt: new Date() },
+        data: { status: 'COMPLETED', completedAt: new Date(), pathNote },
     });
 }
 

@@ -5,7 +5,7 @@ import { handleError } from '@/lib/api';
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'] as const;
 
 // 0.0.0.0 holds the DNS reconnaissance summary, which is not a host finding.
-const hostFindings = { ip: { not: '0.0.0.0' }, closedAt: null };
+const hostFindings = { ip: { not: '0.0.0.0' }, closedAt: null, dismissedAt: null };
 
 export async function GET() {
     try {

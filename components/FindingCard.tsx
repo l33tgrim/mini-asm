@@ -22,6 +22,8 @@ export interface Finding {
     domains: string | null;
     techStack: string | null;
     closedAt?: string | null;
+    dismissedAt?: string | null;
+    dismissReason?: string | null;
     updatedAt: string;
 }
 

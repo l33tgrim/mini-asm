@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { type Finding } from '@/components/FindingCard';
-import FindingGroupCard from '@/components/FindingGroupCard';
+import FindingGroupCard, { type DismissHandler } from '@/components/FindingGroupCard';
 import { groupFindings } from '@/lib/group-findings';
 import { ErrorBanner, StatusBadge } from '@/components/ui';
 import { SEVERITIES, apiError, formatDateTime, formatDuration, portLabel, severityBar, severityLabel } from '@/lib/ui';
@@ -195,12 +195,23 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         );
     }
 
+    const active = scan.findings.filter((f) => !f.dismissedAt);
+    const dismissedGroups = groupFindings(scan.findings.filter((f) => f.dismissedAt));
+    const dismiss: DismissHandler = async (ids, restore, reason) => {
+        try {
+            await axios.post('/api/findings/dismiss', { ids, restore, reason });
+            await fetchScan();
+        } catch (e) {
+            setError(apiError(e, restore ? 'Could not restore the finding.' : 'Could not mark the finding as a false positive.'));
+        }
+    };
+
     const q = filter.trim().toLowerCase();
-    const filteredFindings = scan.findings.filter((f) =>
+    const filteredFindings = active.filter((f) =>
         !q || [f.ip, String(f.port), portLabel(f.port, f.protocol), f.service, f.description, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)));
     const groups = groupFindings(filteredFindings);
-    const allGroups = groupFindings(scan.findings);
-    const hostCount = new Set(scan.findings.map((f) => f.ip)).size;
+    const allGroups = groupFindings(active);
+    const hostCount = new Set(active.map((f) => f.ip)).size;
 
     const progress = scan.totalIps > 0 ? Math.round((scan.currentIndex / scan.totalIps) * 100) : 0;
     const started = scan.startedAt ? new Date(scan.startedAt).getTime() : null;
@@ -282,7 +293,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
             {scan.pathNote && (
                 <p className="flex gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden />
-                    <span>{scan.pathNote}</span>
+                    <span className="whitespace-pre-line">{scan.pathNote}</span>
                 </p>
             )}
 
@@ -322,14 +333,26 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         />
                     </div>
 
-                    {groups.map((group) => <FindingGroupCard key={group.key} group={group} />)}
+                    {groups.map((group) => <FindingGroupCard key={group.key} group={group} onDismiss={dismiss} />)}
 
                     {filteredFindings.length === 0 && (
                         <p className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
-                            {scan.findings.length > 0
+                            {active.length > 0
                                 ? 'No findings match that filter.'
+                                : dismissedGroups.length > 0 ? 'Everything found here is marked as a false positive.'
                                 : isLive ? 'No open services found yet.' : 'No open services were found on this target.'}
                         </p>
+                    )}
+
+                    {dismissedGroups.length > 0 && (
+                        <details className="rounded-2xl border border-border bg-card">
+                            <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted-foreground">
+                                False positives ({dismissedGroups.length})
+                            </summary>
+                            <div className="space-y-3 border-t border-border p-3">
+                                {dismissedGroups.map((group) => <FindingGroupCard key={group.key} group={group} onDismiss={dismiss} dismissed />)}
+                            </div>
+                        </details>
                     )}
                 </div>
             </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Download, RefreshCw, Search, Server, ShieldCheck, Flame, ListChecks } from 'lucide-react';
+import { AlertTriangle, Download, EyeOff, RefreshCw, Search, Server, ShieldCheck, Flame, ListChecks } from 'lucide-react';
 import axios from 'axios';
 import { type Finding } from '@/components/FindingCard';
-import FindingGroupCard from '@/components/FindingGroupCard';
+import FindingGroupCard, { type DismissHandler } from '@/components/FindingGroupCard';
 import { groupFindings } from '@/lib/group-findings';
 import { ErrorBanner, IconButton, PageHeader, StatCard } from '@/components/ui';
 import { SEVERITIES, SEVERITY_RANK, apiError, portLabel } from '@/lib/ui';
@@ -31,7 +31,8 @@ function exportCsv(findings: Finding[]) {
 }
 
 export default function FindingsPage() {
-    const [findings, setFindings] = useState<Finding[]>([]);
+    const [all, setAll] = useState<Finding[]>([]);
+    const [showDismissed, setShowDismissed] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<string>('ALL');
@@ -41,9 +42,9 @@ export default function FindingsPage() {
     const fetchFindings = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await axios.get('/api/findings');
+            const res = await axios.get('/api/findings?dismissed=1');
             // 0.0.0.0 holds the DNS reconnaissance summary, shown on the attack surface page instead.
-            setFindings((res.data as Finding[]).filter((f) => f.ip !== '0.0.0.0'));
+            setAll((res.data as Finding[]).filter((f) => f.ip !== '0.0.0.0'));
             setError(null);
         } catch (e) {
             setError(apiError(e, 'Could not load findings.'));
@@ -56,13 +57,27 @@ export default function FindingsPage() {
         fetchFindings();
     }, [fetchFindings]);
 
+    const findings = useMemo(() => all.filter((f) => !f.dismissedAt), [all]);
+    const dismissed = useMemo(() => all.filter((f) => f.dismissedAt), [all]);
+    const shown = showDismissed ? dismissed : findings;
+
+    const dismiss: DismissHandler = async (ids, restore, reason) => {
+        try {
+            await axios.post('/api/findings/dismiss', { ids, restore, reason });
+            await fetchFindings();
+            if (restore && dismissed.length <= ids.length) setShowDismissed(false);
+        } catch (e) {
+            setError(apiError(e, restore ? 'Could not restore the finding.' : 'Could not mark the finding as a false positive.'));
+        }
+    };
+
     const filtered = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
-        return findings
+        return shown
             .filter((f) => filter === 'ALL' || f.severity === filter)
             .filter((f) => !q || [f.ip, String(f.port), portLabel(f.port, f.protocol), f.service, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)))
             .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
-    }, [findings, filter, searchQuery]);
+    }, [shown, filter, searchQuery]);
 
     const groups = useMemo(() => groupFindings(filtered), [filtered]);
     const allGroups = useMemo(() => groupFindings(findings), [findings]);
@@ -121,6 +136,17 @@ export default function FindingsPage() {
                         </button>
                     ))}
                 </div>
+                {(dismissed.length > 0 || showDismissed) && (
+                    <button
+                        type="button"
+                        aria-pressed={showDismissed}
+                        onClick={() => { setShowDismissed(!showDismissed); setVisible(PAGE_SIZE); }}
+                        className={`flex w-fit items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-medium transition-colors ${showDismissed ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                    >
+                        <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                        False positives ({groupFindings(dismissed).length})
+                    </button>
+                )}
             </div>
 
             <div className="space-y-3">
@@ -131,18 +157,18 @@ export default function FindingsPage() {
                         <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" aria-hidden />
                         <p className="text-sm font-medium">No findings to show</p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            {findings.length === 0 ? 'Run a scan to discover exposed services.' : 'Try a different search or severity filter.'}
+                            {shown.length === 0 ? (showDismissed ? 'Nothing is marked as a false positive.' : 'Run a scan to discover exposed services.') : 'Try a different search or severity filter.'}
                         </p>
                     </div>
                 ) : (
-                    groups.slice(0, visible).map((group) => <FindingGroupCard key={group.key} group={group} />)
+                    groups.slice(0, visible).map((group) => <FindingGroupCard key={group.key} group={group} onDismiss={dismiss} dismissed={showDismissed} />)
                 )}
             </div>
 
             {groups.length > 0 && (
                 <div className="flex flex-col items-center gap-3">
                     <p className="text-xs text-muted-foreground">
-                        Showing {Math.min(visible, groups.length)} of {groups.length} findings across {filtered.length} host and port entries
+                        Showing {Math.min(visible, groups.length)} of {groups.length} {groups.length === 1 ? 'finding' : 'findings'} across {filtered.length} host and port {filtered.length === 1 ? 'entry' : 'entries'}
                     </p>
                     {visible < groups.length && (
                         <button type="button" onClick={() => setVisible(visible + PAGE_SIZE)} className="rounded-full border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent">
