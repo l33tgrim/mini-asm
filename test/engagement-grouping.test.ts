@@ -39,3 +39,12 @@ test('SPF all mechanism', () => {
     assert.equal(spfAll('v=spf1 all'), '+');
     assert.equal(spfAll('v=spf1 include:_spf.allstate.com'), null);
 });
+
+test('hosted SPF and DMARC providers are recognised', async () => {
+    const { spfRedirect, emailProviders } = await import('../lib/engine/scenarios/email-posture');
+    assert.equal(spfRedirect('v=spf1 redirect=abc123.spf.sendmarc.com'), 'abc123.spf.sendmarc.com');
+    assert.equal(spfRedirect('v=spf1 -all'), null);
+    assert.deepEqual(emailProviders('v=spf1 include:abc.spf.sendmarc.com include:spf.protection.outlook.com -all'), ['Sendmarc', 'Microsoft 365']);
+    assert.deepEqual(emailProviders('v=DMARC1; p=reject; rua=mailto:x@rua.sendmarc.com'), ['Sendmarc']);
+    assert.deepEqual(emailProviders('v=DMARC1; p=none'), []);
+});

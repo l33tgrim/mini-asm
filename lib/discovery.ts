@@ -209,6 +209,15 @@ const PROVIDERS: [RegExp, string][] = [
     [/\.atlassian\.net$|\.atlassian\.com$/, 'Atlassian'],
     [/\.mimecast\.com$|\.mimecast\.co\.za$/, 'Mimecast'],
     [/\.pphosted\.com$/, 'Proofpoint'],
+    // Hosted SPF and DMARC services.
+    [/(^|\.)sendmarc\.com$/, 'Sendmarc'],
+    [/(^|\.)dmarcian\.com$/, 'dmarcian'],
+    [/(^|\.)vali\.email$|(^|\.)valimail\.com$/, 'Valimail'],
+    [/(^|\.)easydmarc\.(com|us|eu)$/, 'EasyDMARC'],
+    [/(^|\.)ondmarc\.com$|(^|\.)redsift\.cloud$/, 'Red Sift OnDMARC'],
+    [/(^|\.)powerdmarc\.com$/, 'PowerDMARC'],
+    [/(^|\.)emailauth\.proofpoint\.com$|(^|\.)dmarc\.has\.pphosted\.com$/, 'Proofpoint EFD'],
+    [/(^|\.)agari\.com$/, 'Agari'],
 ];
 
 export function providerFor(host: string): string | null {

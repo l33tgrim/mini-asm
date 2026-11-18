@@ -1,7 +1,7 @@
 import dns from 'dns';
 import type { Scenario, ScenarioResult } from '../types';
 import { classifyScope } from '@/lib/safety/scope';
-import { registrableDomain } from '@/lib/discovery';
+import { providerFor, registrableDomain } from '@/lib/discovery';
 
 const dnsp = dns.promises;
 
@@ -20,6 +20,21 @@ export function dmarcPolicy(record: string, subdomain = false): string {
     const tags = new Map(record.split(';').map((t) => t.trim().split('=').map((v) => v.trim().toLowerCase()) as [string, string]));
     const p = tags.get('p') || 'none';
     return subdomain ? tags.get('sp') || p : p;
+}
+
+/** The redirect= target of an SPF record, if it hands off to another record. */
+export function spfRedirect(record: string): string | null {
+    return record.match(/(?:^|\s)redirect=([^\s]+)/i)?.[1]?.toLowerCase() ?? null;
+}
+
+/** Hosted SPF or DMARC services named in a record or alias, e.g. Sendmarc. */
+export function emailProviders(...values: string[]): string[] {
+    const names = values.flatMap((v) => v.toLowerCase().match(/[a-z0-9.-]+\.[a-z]{2,}/g) ?? []);
+    return Array.from(new Set(names.map((n) => providerFor(n.replace(/^[^a-z0-9]+/, ''))).filter((p): p is string => !!p)));
+}
+
+async function cname(name: string): Promise<string[]> {
+    return dnsp.resolveCname(name).catch(() => []);
 }
 
 /** SPF all mechanism, read from the end of the record. */
@@ -71,12 +86,26 @@ export const emailPosture: Scenario = {
         let spfAt = host;
         if (!spf && isSub) { spf = findSpf(orgTxt); spfAt = org; }
 
+        // Hosted SPF often ends in redirect= instead of an all mechanism, so
+        // the provider's record decides the policy.
+        let effective = spf;
+        const chain: string[] = [];
+        for (let hop = 0; effective && !spfAll(effective) && hop < 3; hop++) {
+            const next = spfRedirect(effective);
+            if (!next) break;
+            chain.push(next);
+            effective = findSpf(await txt(next));
+        }
+        const spfVia = chain.length > 0 ? `\nFollows redirect to ${chain.join(' -> ')}${effective ? `: ${effective}` : ' (record not found)'}` : '';
+        const spfHosts = spf ? emailProviders(spf, ...chain) : [];
+        const spfManaged = spfHosts.length > 0 ? `\nManaged by ${spfHosts.join(', ')}` : '';
+
         if (!spf) {
             results.push({ title: 'No SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: org, attckTechnique: 'T1566 Phishing', evidence: `No v=spf1 TXT record on ${isSub ? `${host} or ${org}` : host}.`, remediation: 'Publish an SPF record listing authorised senders and end it with -all.' });
-        } else if (['+', '?'].includes(spfAll(spf) ?? '')) {
-            results.push({ title: 'Permissive SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: spfAt, evidence: `SPF permits unlisted senders: ${spf}`, remediation: 'Tighten SPF to -all (hard fail).' });
+        } else if (['+', '?'].includes(spfAll(effective ?? spf) ?? '')) {
+            results.push({ title: 'Permissive SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: spfAt, evidence: `SPF permits unlisted senders: ${spf}${spfVia}${spfManaged}`, remediation: 'Tighten SPF to -all (hard fail).' });
         } else {
-            results.push({ title: 'SPF present', severity: 'INFO', outcome: 'SECURE', target: spfAt, evidence: spf });
+            results.push({ title: 'SPF present', severity: 'INFO', outcome: 'SECURE', target: spfAt, evidence: `${spf}${spfVia}${spfManaged}` });
         }
 
         let dmarc = findDmarc(hostDmarc);
@@ -88,7 +117,15 @@ export const emailPosture: Scenario = {
         } else {
             const inherited = dmarcAt !== host;
             const policy = dmarcPolicy(dmarc, inherited);
-            const evidence = inherited ? `${dmarc}\n(${host} is covered by the record on _dmarc.${org})` : dmarc;
+            // Hosted DMARC is usually a CNAME from _dmarc to the provider.
+            const alias = await cname(`_dmarc.${dmarcAt}`);
+            const dmarcHosts = emailProviders(dmarc, ...alias);
+            const evidence = [
+                dmarc,
+                alias.length > 0 ? `_dmarc.${dmarcAt} is an alias for ${alias.join(' -> ')}` : '',
+                dmarcHosts.length > 0 ? `Managed by ${dmarcHosts.join(', ')}` : '',
+                inherited ? `(${host} is covered by the record on _dmarc.${org})` : '',
+            ].filter(Boolean).join('\n');
             if (policy === 'none') {
                 results.push({ title: 'DMARC policy is monitor-only (p=none)', severity: 'LOW', outcome: 'VULNERABLE', target: dmarcAt, evidence, remediation: 'Move DMARC to p=quarantine then p=reject once reporting is clean.' });
             } else {
