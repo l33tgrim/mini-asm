@@ -67,6 +67,26 @@ also runs:
   the content has the expected format, which confirms it without storing it.
 - TLS, security headers, cookies, CORS, HTTP methods and directory listing.
 
+The port scan itself also reads each web page and certificate it finds, and
+covers the same ground as the usual external rating tools:
+
+| Check | Severity |
+| --- | --- |
+| Certificate expired | High |
+| Certificate expires within 30 days | Medium |
+| HTTPS redirects to an `http://` address | Medium |
+| Certificate past 80% of its validity | Low |
+| HTTP not redirected to HTTPS, HSTS missing | Low |
+| CSP missing, or weakened by `unsafe-inline`, `unsafe-eval` or wildcard script sources | Low |
+| X-Frame-Options missing, or set to something other than DENY or SAMEORIGIN | Low |
+| Cookies without HttpOnly or Secure | Low |
+| Server or X-Powered-By header showing a version number | Low |
+| DNSSEC not enabled for the domain (DNS Discovery summary) | Low |
+| NTP answering on UDP 123 | Low, higher if it leaks its version or answers monlist |
+
+These are kept low on purpose. They are hygiene items that rating sites count,
+not proof that anything can be broken into.
+
 Confirmation is always non-destructive. The proof scenarios (reach, command,
 data) show that a weakness is real with a handshake, one read-only command or
 metadata counts. See [docs/SAFETY.md](docs/SAFETY.md).

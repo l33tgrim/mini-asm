@@ -203,14 +203,15 @@ async function saveDiscoveryFinding(scanId: string, resolution: TargetResolution
     const details = resolution.discoveryDetails;
     const pick = (...needles: string[]) => details.filter((d) => needles.some((n) => d.includes(n)));
 
-    const warnings = details.filter((d) => d.includes('⚠️'));
+    // ⚠️ marks a real problem, 🔹 a hygiene note that only raises the summary to LOW.
+    const warnings = details.filter((d) => d.includes('⚠️') || d.startsWith('🔹 '));
     let severity = 'INFO';
-    if (warnings.length > 0) severity = 'MEDIUM';
+    if (warnings.length > 0) severity = warnings.some((d) => d.includes('⚠️')) ? 'MEDIUM' : 'LOW';
     if (warnings.some((d) => d.includes('expired'))) severity = 'HIGH';
 
     const section = (title: string, lines: string[]) => (lines.length > 0 ? [`=== ${title} ===`, ...lines, ''] : []);
     const forensics = [
-        ...section('DNS RECORDS', pick('A Records', 'CNAME Chain', 'Nameservers', 'MX Record', 'SRV Record', 'Wildcard DNS', 'Reverse DNS', 'Skipped')),
+        ...section('DNS RECORDS', pick('A Records', 'CNAME Chain', 'Nameservers', 'DNSSEC', 'MX Record', 'SRV Record', 'Wildcard DNS', 'Reverse DNS', 'Skipped')),
         ...section('SUBDOMAINS', pick('Certificate logs', 'Subdomain [', 'AI name suggestions')),
         ...section('STALE NAMES', pick('Stale name')),
         ...section('HOSTING AND THIRD PARTIES', pick('Alias:', 'Network owner', 'SaaS in use', 'Third-party sender', 'Declared mail range', 'Related domain')),
@@ -222,7 +223,7 @@ async function saveDiscoveryFinding(scanId: string, resolution: TargetResolution
         service: 'DNS Discovery',
         severity,
         description: `Domain reconnaissance for ${resolution.target}. Discovered ${resolution.ips.length} IP addresses and ${resolution.subdomainCount} subdomains.`,
-        vulnerability: warnings.map((d) => d.replace('⚠️ ', '')).join('; ') || null,
+        vulnerability: warnings.map((d) => d.replace(/^(⚠️|🔹) /, '')).join('; ') || null,
         forensics,
         domains: resolution.target,
         scans: { connect: { id: scanId } },

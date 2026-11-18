@@ -360,3 +360,35 @@ export async function networkOwner(ip: string): Promise<NetworkOwner | null> {
         return null;
     }
 }
+
+/** Reads a DNS-over-HTTPS JSON answer and says whether a DS record is published. */
+export function dsPublished(answer: unknown): boolean | null {
+    if (!answer || typeof answer !== 'object') return null;
+    const { Status, Answer } = answer as { Status?: number; Answer?: { type?: number }[] };
+    if (Status !== 0 && Status !== 3) return null;
+    return Array.isArray(Answer) && Answer.some((a) => a?.type === 43);
+}
+
+/**
+ * DNSSEC is on when the parent zone publishes a DS record for the domain.
+ * Node's resolver cannot ask for DS, so this uses DNS over HTTPS. Returns
+ * null when no resolver could be reached, so nothing is reported.
+ */
+export async function dnssecEnabled(domain: string): Promise<boolean | null> {
+    const name = encodeURIComponent(domain);
+    const sources: [string, string][] = [
+        [`https://dns.google/resolve?name=${name}&type=DS`, 'application/json'],
+        [`https://cloudflare-dns.com/dns-query?name=${name}&type=DS`, 'application/dns-json'],
+    ];
+    for (const [url, accept] of sources) {
+        try {
+            const res = await fetch(url, { signal: AbortSignal.timeout(5000), headers: { accept, 'user-agent': 'mini-asm' } });
+            if (!res.ok) continue;
+            const result = dsPublished(await res.json());
+            if (result !== null) return result;
+        } catch {
+            // Try the next resolver.
+        }
+    }
+    return null;
+}

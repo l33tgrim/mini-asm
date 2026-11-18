@@ -4,11 +4,12 @@ import dns from 'dns';
 import { randomBytes } from 'crypto';
 import { isScannableIp, parseTarget, MAX_IPS_PER_SCAN } from './targets';
 import {
-    aiCandidates, certificateLogNames, cnameChain, dkimSelectors, networkOwner, parseSpf, patternCandidates, pool,
+    aiCandidates, certificateLogNames, cnameChain, dkimSelectors, dnssecEnabled, networkOwner, parseSpf, patternCandidates, pool,
     providerFor, registrableDomain, servicesFromTxt, srvRecords,
 } from './discovery';
 
 import { portMeta, DEFAULT_TCP_PORTS } from './ports';
+import { certificateLifetimeIssues, headerIssues } from './web-checks';
 import { CONTROL_IP, interceptedUdpPorts, probeUdp } from './udp';
 import type { Severity } from './ports';
 
@@ -117,22 +118,7 @@ async function fetchWebDetails(ip: string, port: number, hostname?: string, useT
         if (serverLower.includes('microsoft-iis')) details.tech.push('Server: IIS');
         if (serverLower.includes('cloudflare')) details.tech.push('Proxy: Cloudflare');
 
-        const isRedirect = response.status >= 300 && response.status < 400;
-        const location = response.headers.get('location') || '';
-        if (protocol === 'http') {
-            if (!(isRedirect && location.startsWith('https://'))) {
-                details.issues.push({ text: 'Content served over unencrypted HTTP', severity: 'LOW', fix: 'Redirect all HTTP traffic to HTTPS.' });
-            }
-        } else if (!response.headers.get('strict-transport-security')) {
-            details.issues.push({ text: 'Missing Strict-Transport-Security header', severity: 'LOW', fix: 'Send a Strict-Transport-Security header so browsers always use HTTPS.' });
-        }
-        if (!isRedirect) {
-            const csp = response.headers.get('content-security-policy') || '';
-            if (!csp) details.issues.push({ text: 'Missing Content-Security-Policy header', severity: 'LOW', fix: 'Define a Content-Security-Policy for the site.' });
-            if (!response.headers.get('x-frame-options') && !csp.includes('frame-ancestors')) {
-                details.issues.push({ text: 'Missing clickjacking protection (X-Frame-Options or frame-ancestors)', severity: 'LOW', fix: 'Set X-Frame-Options or a frame-ancestors policy to prevent framing.' });
-            }
-        }
+        details.issues.push(...headerIssues(protocol, response.status, response.headers));
     } catch {
         // Unreachable, TLS failure or timeout: nothing to report.
     } finally {
@@ -176,12 +162,8 @@ function extractSSLInfo(host: string, port = 443, servername?: string): Promise<
                     result.issuer = clean(Array.isArray(issuer) ? issuer.join(' ') : issuer, 100);
                     result.validTo = cert.valid_to;
 
+                    result.issues.push(...certificateLifetimeIssues(cert.valid_from, cert.valid_to));
                     const days = Math.floor((new Date(cert.valid_to).getTime() - Date.now()) / 86_400_000);
-                    if (days < 0) {
-                        result.issues.push({ text: 'TLS certificate has expired', severity: 'HIGH', fix: 'Renew the TLS certificate.' });
-                    } else if (days < 30) {
-                        result.issues.push({ text: `TLS certificate expires in ${days} days`, severity: 'MEDIUM', fix: 'Renew the TLS certificate before it expires.' });
-                    }
 
                     if (servername && !socket.authorized && days >= 0) {
                         const reason = clean(String(socket.authorizationError || 'unknown reason'), 80);
@@ -434,6 +416,11 @@ export async function resolveDomain(domain: string): Promise<DomainResolution> {
         if (!hasDMARC) details.push('⚠️ Email Security: Missing DMARC record');
     }
 
+    const zone = registrableDomain(domain) || domain;
+    const dnssec = await dnssecEnabled(zone);
+    if (dnssec === true) details.push(`DNSSEC: enabled for ${zone}`);
+    if (dnssec === false) details.push(`🔹 DNSSEC: not enabled for ${zone}`);
+
     // Wildcard DNS makes every guessed name resolve. Detect it so guessed names
     // are not reported as real hosts.
     const wildcardIps = new Set(await resolve4(`${randomBytes(8).toString('hex')}.${domain}`));
@@ -489,7 +476,7 @@ export async function resolveDomain(domain: string): Promise<DomainResolution> {
                     details.push(`SSL Certificate Issuer: ${info.issuer}`);
                     details.push(`SSL Certificate Expires: ${info.validTo}`);
                 }
-                info.issues.forEach((issue) => details.push(`⚠️ SSL: ${issue.text}`));
+                info.issues.forEach((issue) => details.push(`${issue.severity === 'LOW' ? '🔹' : '⚠️'} SSL: ${issue.text}`));
             }
             for (const san of info.sans) {
                 if (!inScope(san)) noteRelated(san);
