@@ -5,7 +5,7 @@ import { AlertTriangle, Download, RefreshCw, Search, ShieldAlert, ShieldCheck, F
 import axios from 'axios';
 import FindingCard, { type Finding } from '@/components/FindingCard';
 import { ErrorBanner, IconButton, PageHeader, StatCard } from '@/components/ui';
-import { SEVERITIES, SEVERITY_RANK, apiError } from '@/lib/ui';
+import { SEVERITIES, SEVERITY_RANK, apiError, portLabel } from '@/lib/ui';
 
 const PAGE_SIZE = 50;
 
@@ -58,7 +58,7 @@ export default function FindingsPage() {
         const q = searchQuery.trim().toLowerCase();
         return findings
             .filter((f) => filter === 'ALL' || f.severity === filter)
-            .filter((f) => !q || [f.ip, String(f.port), f.service, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)))
+            .filter((f) => !q || [f.ip, String(f.port), portLabel(f.port, f.protocol), f.service, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)))
             .sort((a, b) => (SEVERITY_RANK[b.severity] ?? 0) - (SEVERITY_RANK[a.severity] ?? 0));
     }, [findings, filter, searchQuery]);
 

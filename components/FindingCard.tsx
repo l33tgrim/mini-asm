@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { AlertTriangle, ChevronDown, ShieldCheck } from 'lucide-react';
 import { SeverityBadge } from '@/components/ui';
-import { formatDateTime, severityBar } from '@/lib/ui';
+import { formatDateTime, severityBar, portLabel } from '@/lib/ui';
 
 export interface Finding {
     id: string;
     ip: string;
     port: number;
+    protocol?: string;
     service: string | null;
     version: string | null;
     banner: string | null;
@@ -44,7 +45,7 @@ export default function FindingCard({ finding }: { finding: Finding }) {
                             <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-semibold">
                                     {finding.service || 'Unknown service'}
-                                    <span className="font-normal text-muted-foreground"> on port {finding.port}</span>
+                                    <span className="font-normal text-muted-foreground"> on port {portLabel(finding.port, finding.protocol)}</span>
                                 </h3>
                                 <SeverityBadge severity={finding.severity} />
                                 {finding.version && (

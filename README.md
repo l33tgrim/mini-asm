@@ -130,8 +130,41 @@ Every command emits JSON (except `report --md`).
 
 ## Scans and schedules
 
-A scan validates the target, maps it, then probes 50 common ports per host with
-banner, HTTP header and TLS certificate checks.
+A scan validates the target, maps it, then checks TCP ports on each host with
+banner, HTTP header and TLS certificate checks, and probes common UDP services.
+
+### Choosing ports
+
+The new scan form takes presets and custom ports together. Presets are the default
+list of 50 common ports, remote access (SSH, RDP, VNC, TeamViewer, WinRM and similar),
+databases and caches, VPN and gateways, admin and DevOps, web, mail, industrial
+control (Modbus, S7, DNP3, OPC UA, EtherNet/IP), and all of 1 to 1024. Custom ports are single
+numbers or ranges such as `8000-8100, 10443`. The API takes the same syntax, for
+example `POST /api/scans` with `{"target":"203.0.113.10","ports":"remote-access,8000-8100","udp":true}`.
+
+A scan allows up to 5,000 ports per host and 100,000 host and port checks in total.
+Ports outside the built-in tables are named from their banner, or tried as HTTPS
+and HTTP when they stay quiet.
+
+### UDP probes
+
+UDP has no handshake, so a closed port and a filtered port look the same: nothing
+comes back. The scanner therefore sends a real protocol request to each UDP service
+and only reports a port as open when the service answers. Silence is never reported.
+
+- NTP 123: time request, mode 6 READVAR (ntpd version, OS) and mode 7 monlist
+  (CVE-2013-5211 amplification). ntpd older than 4.2.8 is flagged.
+- SNMP 161: v1 and v2c GetRequest for sysDescr and sysName with the `public` and
+  `private` communities, plus a v3 discovery that reveals the engine ID, vendor,
+  MAC, reboot count and uptime without any credentials.
+- DNS 53: version.bind and an open recursion test.
+- SSDP 1900, SIP 5060 and memcached 11211: the server header or version string.
+
+Each finding records what was sent, how many bytes came back and the amplification
+factor, so the evidence can be checked by hand. UDP findings show as `123/udp`.
+
+A rescan only closes ports that it checked again, so a narrow custom scan never
+marks ports outside its range as closed.
 
 For a domain the mapping follows what an outside attacker would do:
 
@@ -192,8 +225,9 @@ Add scenarios and playbooks per [docs/SCENARIOS.md](docs/SCENARIOS.md).
 npm test
 ```
 
-Covers the safety gates: scope matching, the authorisation and verification
-requirements for active scenarios, and the command allowlist.
+Covers the safety gates (scope matching, the authorisation and verification
+requirements for active scenarios, the command allowlist), port spec parsing, and
+the UDP probes against local fake NTP, SNMP, DNS, SSDP, SIP and memcached servers.
 
 ## Stop everything
 

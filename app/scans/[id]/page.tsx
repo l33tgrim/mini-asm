@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import FindingCard, { type Finding } from '@/components/FindingCard';
 import { ErrorBanner, StatusBadge } from '@/components/ui';
-import { SEVERITIES, apiError, formatDateTime, formatDuration, severityBar, severityLabel } from '@/lib/ui';
+import { SEVERITIES, apiError, formatDateTime, formatDuration, portLabel, severityBar, severityLabel } from '@/lib/ui';
 
 interface Scan {
     id: string;
@@ -16,6 +16,8 @@ interface Scan {
     type: string;
     currentIndex: number;
     totalIps: number;
+    portSpec?: string | null;
+    udp?: boolean;
     startedAt: string | null;
     completedAt: string | null;
     createdAt: string;
@@ -26,6 +28,7 @@ interface Scan {
 interface ServiceRef {
     ip: string;
     port: number;
+    protocol?: string;
     service: string | null;
 }
 
@@ -55,7 +58,7 @@ function ChangeList({ title, items, highlight }: { title: string; items: string[
 }
 
 function ChangesPanel({ changes }: { changes: Changes }) {
-    const service = (s: ServiceRef) => `${s.ip}:${s.port}${s.service ? ` ${s.service}` : ''}`;
+    const service = (s: ServiceRef) => `${s.ip}:${portLabel(s.port, s.protocol)}${s.service ? ` ${s.service}` : ''}`;
     return (
         <section className="rounded-2xl border border-border bg-card p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -159,7 +162,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
 
     const q = filter.trim().toLowerCase();
     const filteredFindings = scan.findings.filter((f) =>
-        !q || [f.ip, String(f.port), f.service, f.description, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)));
+        !q || [f.ip, String(f.port), portLabel(f.port, f.protocol), f.service, f.description, f.domains, f.vulnerability].some((v) => v?.toLowerCase().includes(q)));
 
     const progress = scan.totalIps > 0 ? Math.round((scan.currentIndex / scan.totalIps) * 100) : 0;
     const started = scan.startedAt ? new Date(scan.startedAt).getTime() : null;
@@ -184,6 +187,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                         <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" aria-hidden /> {formatDateTime(scan.createdAt)}</span>
                             <span>{scan.type === 'SCHEDULED' ? 'Scheduled scan' : 'Manual scan'}</span>
+                            <span className="min-w-0 break-all">TCP: {scan.portSpec || 'default list'}{scan.udp === false ? '' : ' · UDP probes'}</span>
                             {elapsed !== null && (
                                 <span className="flex items-center gap-1.5 tabular-nums"><Timer className="h-3.5 w-3.5" aria-hidden /> {formatDuration(elapsed)}</span>
                             )}

@@ -6,6 +6,7 @@
 
 export interface AssetPort {
     port: number;
+    protocol?: string;
     service?: string | null;
 }
 
@@ -37,7 +38,9 @@ const isTls = (p: AssetPort) => TLS_PORTS.has(p.port) || /https|ssl|tls/i.test(p
 
 const list = (ports: number[]) => ports.slice(0, 4).join(', ') + (ports.length > 4 ? '…' : '');
 
-export function suggestScenarios(asset: Asset): Suggestion[] {
+export function suggestScenarios(input: Asset): Suggestion[] {
+    // The scenarios connect over TCP, so UDP findings such as NTP or SNMP do not qualify a target.
+    const asset = { ...input, ports: input.ports.filter((p) => (p.protocol ?? 'tcp') === 'tcp') };
     const out: Suggestion[] = [];
     const add = (scenarioId: string, reason: string) => {
         if (!out.some((s) => s.scenarioId === scenarioId)) out.push({ scenarioId, reason });

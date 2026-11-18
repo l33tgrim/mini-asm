@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
-import { getTargetIps, scanIp, type ScanResult, type TargetResolution } from './scanner';
+import { getTargetIps, scanIp, UDP_PROBE_PORTS, type ScanResult, type TargetResolution } from './scanner';
+import { MAX_PROBES_PER_SCAN, parsePortSpec, PortSpecError } from './ports';
 
 export const MAX_CONCURRENT_SCANS = 3;
 const SCAN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -28,7 +29,7 @@ function parseJson<T>(value: string | null, fallback: T): T {
 
 async function saveFinding(scanId: string, f: ScanResult, extraDomains: string[]) {
     const existing = await prisma.finding.findUnique({
-        where: { ip_port: { ip: f.ip, port: f.port } },
+        where: { ip_port_protocol: { ip: f.ip, port: f.port, protocol: f.protocol ?? 'tcp' } },
         select: { domains: true },
     });
     const domainSet = new Set((existing?.domains || '').split(',').filter(Boolean));
@@ -51,19 +52,54 @@ async function saveFinding(scanId: string, f: ScanResult, extraDomains: string[]
     };
 
     await prisma.finding.upsert({
-        where: { ip_port: { ip: f.ip, port: f.port } },
+        where: { ip_port_protocol: { ip: f.ip, port: f.port, protocol: f.protocol ?? 'tcp' } },
         update: data,
-        create: { ip: f.ip, port: f.port, ...data },
+        create: { ip: f.ip, port: f.port, protocol: f.protocol ?? 'tcp', ...data },
     });
 }
 
-/** Marks every known port on the host that was not in this scan's results as closed. */
-export async function markClosed(ip: string, openPorts: number[]) {
-    await prisma.finding.updateMany({
+/**
+ * Marks known ports on the host as closed when this scan checked them and they
+ * did not answer. Ports outside the scanned list are left alone, so a scan of
+ * 8000-8100 does not close port 22.
+ */
+export async function markClosed(ip: string, protocol: 'tcp' | 'udp', scannedPorts: number[], openPorts: number[]) {
+    const scanned = new Set(scannedPorts);
+    const open = new Set(openPorts);
+    const known = await prisma.finding.findMany({
         // Port 0 is the DNS reconnaissance pseudo finding, not a service.
-        where: { ip, closedAt: null, port: { notIn: [0, ...openPorts] } },
-        data: { closedAt: new Date() },
+        where: { ip, protocol, closedAt: null, port: { not: 0 } },
+        select: { id: true, port: true },
     });
+    const ids = known.filter((f) => scanned.has(f.port) && !open.has(f.port)).map((f) => f.id);
+    if (ids.length === 0) return;
+    await prisma.finding.updateMany({ where: { id: { in: ids } }, data: { closedAt: new Date() } });
+}
+
+export interface PortOptions {
+    /** TCP port spec such as "default, 8000-8100". Empty means the default list. */
+    ports?: string | null;
+    /** Run the UDP service probes. Defaults to true. */
+    udp?: boolean;
+}
+
+/** Parses the port spec into a list, turning bad input into a 400 for the caller. */
+export function resolvePorts(spec: string | null | undefined, ipCount = 1): number[] {
+    let ports: number[];
+    try {
+        ports = parsePortSpec(spec);
+    } catch (error) {
+        if (error instanceof PortSpecError) throw new ScanError(error.message, 400);
+        throw error;
+    }
+    if (ports.length * ipCount > MAX_PROBES_PER_SCAN) {
+        throw new ScanError(
+            `${ipCount} hosts x ${ports.length} ports is ${(ports.length * ipCount).toLocaleString('en')} checks. ` +
+            `The limit is ${MAX_PROBES_PER_SCAN.toLocaleString('en')} per scan, so use fewer ports or a smaller range of hosts.`,
+            400,
+        );
+    }
+    return ports;
 }
 
 async function runScan(scanId: string) {
@@ -73,6 +109,7 @@ async function runScan(scanId: string) {
     const ips = parseJson<string[]>(scan.ipList, []);
     const mappings = parseJson<Record<string, string[]>>(scan.hostMap, {});
     const startTime = Date.now();
+    const ports = parsePortSpec(scan.portSpec);
 
     await prisma.scan.update({
         where: { id: scanId },
@@ -91,7 +128,7 @@ async function runScan(scanId: string) {
         let results: ScanResult[] = [];
         let scanned = false;
         try {
-            results = await scanIp(ip, hostnames[0]);
+            results = await scanIp(ip, hostnames[0], { ports, udp: scan.udp });
             scanned = true;
         } catch (error) {
             // One unreachable host must not abort the whole scan.
@@ -109,7 +146,11 @@ async function runScan(scanId: string) {
         // Ports seen before that did not answer this time are marked closed rather than
         // deleted, so the history stays and they come back if they open again.
         if (scanned) {
-            await markClosed(ip, results.map((r) => r.port)).catch((error) => {
+            const openOn = (protocol: string) => results.filter((r) => (r.protocol ?? 'tcp') === protocol).map((r) => r.port);
+            await Promise.all([
+                markClosed(ip, 'tcp', ports, openOn('tcp')),
+                scan.udp ? markClosed(ip, 'udp', UDP_PROBE_PORTS, openOn('udp')) : null,
+            ]).catch((error) => {
                 console.error(`[scan ${scanId}] could not mark closed ports on ${ip}:`, error);
             });
         }
@@ -170,19 +211,22 @@ async function saveDiscoveryFinding(scanId: string, resolution: TargetResolution
 
     // The reconnaissance summary is stored as a pseudo finding on 0.0.0.0:0.
     await prisma.finding.upsert({
-        where: { ip_port: { ip: '0.0.0.0', port: 0 } },
+        where: { ip_port_protocol: { ip: '0.0.0.0', port: 0, protocol: 'tcp' } },
         update: data,
         create: { ip: '0.0.0.0', port: 0, ...data },
     });
 }
 
 /** Validates the target, records the scan and starts it in the background. */
-export async function startScan(rawTarget: string, type: 'MANUAL' | 'SCHEDULED' = 'MANUAL') {
+export async function startScan(rawTarget: string, type: 'MANUAL' | 'SCHEDULED' = 'MANUAL', options: PortOptions = {}) {
     assertCapacity();
+    const portSpec = options.ports?.trim() || null;
+    resolvePorts(portSpec); // fail fast on bad input before any DNS work
     const resolution = await getTargetIps(rawTarget);
     if (resolution.ips.length === 0) {
         throw new ScanError('Could not resolve any scannable IP addresses for that target.', 400);
     }
+    resolvePorts(portSpec, resolution.ips.length);
     assertCapacity();
 
     const scan = await prisma.scan.create({
@@ -193,6 +237,8 @@ export async function startScan(rawTarget: string, type: 'MANUAL' | 'SCHEDULED' 
             totalIps: resolution.ips.length,
             ipList: JSON.stringify(resolution.ips),
             hostMap: JSON.stringify(resolution.mappings),
+            portSpec,
+            udp: options.udp ?? true,
         },
     });
 

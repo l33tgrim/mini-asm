@@ -16,6 +16,8 @@ model Scan {
   totalIps       Int       @default(0)
   ipList         String?   // JSON string of all IPs to scan
   hostMap        String?   // JSON map of IP -> hostnames, kept so a resumed scan has the same context
+  portSpec       String?   // TCP ports as typed, e.g. "default, 8000-8100". Null means the default list
+  udp            Boolean   @default(true) // Run the UDP service probes as well
   startedAt      DateTime?
   completedAt    DateTime?
   createdAt      DateTime  @default(now())
@@ -27,6 +29,7 @@ model Finding {
   id            String   @id @default(cuid())
   ip            String
   port          Int
+  protocol      String   @default("tcp") // tcp or udp
   service       String?
   version       String?
   banner        String?
@@ -49,7 +52,7 @@ model Finding {
   // Many-to-many relationship with scans
   scans         Scan[]
 
-  @@unique([ip, port], name: "ip_port")
+  @@unique([ip, port, protocol], name: "ip_port_protocol")
 }
 
 model Schedule {

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { splitList, type Finding } from '@/components/FindingCard';
 import { ErrorBanner, PageHeader, SeverityBadge, StatCard } from '@/components/ui';
 import { ThreatScenarioDialog } from '@/components/ThreatScenarioDialog';
-import { SEVERITY_RANK, apiError, formatDateTime, severityBar } from '@/lib/ui';
+import { SEVERITY_RANK, apiError, formatDateTime, portLabel, severityBar } from '@/lib/ui';
 
 interface Host {
     ip: string;
@@ -15,15 +15,15 @@ interface Host {
     maxSeverity: string;
     domains: string[];
     techStack: string[];
-    ports: { port: number; service: string | null; version: string | null; severity: string; description: string | null; issues: string[] }[];
-    closed: { port: number; service: string | null; closedAt: string }[];
+    ports: { port: number; protocol: string; service: string | null; version: string | null; severity: string; description: string | null; issues: string[] }[];
+    closed: { port: number; protocol: string; service: string | null; closedAt: string }[];
 }
 
 interface RescanResult {
     at: string;
     open: number;
-    opened: number[];
-    closed: number[];
+    opened: string[];
+    closed: string[];
     failed?: string;
 }
 
@@ -33,6 +33,12 @@ interface Recon {
     issues: string[];
     forensics: string;
 }
+
+const byPort = (a: { port: number; protocol: string }, b: { port: number; protocol: string }) =>
+    a.port - b.port || a.protocol.localeCompare(b.protocol);
+
+const labels = (ports: { port: number; protocol: string }[]) => new Set(ports.map((p) => portLabel(p.port, p.protocol)));
+const numeric = (a: string, b: string) => parseInt(a, 10) - parseInt(b, 10) || a.localeCompare(b);
 
 function groupByHost(findings: Finding[]): Host[] {
     const hosts = new Map<string, Host>();
@@ -47,14 +53,14 @@ function groupByHost(findings: Finding[]): Host[] {
         splitList(f.techStack, ',').forEach((t) => { if (!current.techStack.includes(t)) current.techStack.push(t); });
         if (f.updatedAt > current.lastSeen) current.lastSeen = f.updatedAt;
         if (f.closedAt) {
-            current.closed.push({ port: f.port, service: f.service, closedAt: f.closedAt });
+            current.closed.push({ port: f.port, protocol: f.protocol ?? 'tcp', service: f.service, closedAt: f.closedAt });
             continue;
         }
-        current.ports.push({ port: f.port, service: f.service, version: f.version, severity: f.severity, description: f.description, issues: splitList(f.vulnerability, ';') });
+        current.ports.push({ port: f.port, protocol: f.protocol ?? 'tcp', service: f.service, version: f.version, severity: f.severity, description: f.description, issues: splitList(f.vulnerability, ';') });
         if ((SEVERITY_RANK[f.severity] ?? 0) > (SEVERITY_RANK[current.maxSeverity] ?? 0)) current.maxSeverity = f.severity;
     }
     return Array.from(hosts.values())
-        .map((h) => ({ ...h, ports: h.ports.sort((a, b) => a.port - b.port), closed: h.closed.sort((a, b) => a.port - b.port) }))
+        .map((h) => ({ ...h, ports: h.ports.sort(byPort), closed: h.closed.sort(byPort) }))
         .sort((a, b) =>
             (SEVERITY_RANK[b.maxSeverity] ?? 0) - (SEVERITY_RANK[a.maxSeverity] ?? 0) ||
             a.ip.localeCompare(b.ip, undefined, { numeric: true }));
@@ -117,20 +123,24 @@ export default function AttackSurfacePage() {
 
     /** Rescans one IP on the page and reports which ports opened or closed since the last look. */
     const rescanHost = async (ip: string) => {
-        const before = new Set(hosts.find((h) => h.ip === ip)?.ports.map((p) => p.port) ?? []);
+        const host = hosts.find((h) => h.ip === ip);
+        const before = labels(host?.ports ?? []);
+        // The default list plus every TCP port this host has ever shown, so custom range finds are rechecked too.
+        const known = [...(host?.ports ?? []), ...(host?.closed ?? [])].filter((p) => p.protocol === 'tcp').map((p) => p.port);
+        const ports = ['default', ...new Set(known)].join(',');
         setRescanning((s) => new Set(s).add(ip));
         setRescans((r) => { const rest = { ...r }; delete rest[ip]; return rest; });
         let result: RescanResult;
         try {
-            const { id } = (await axios.post('/api/scans', { target: ip })).data;
+            const { id } = (await axios.post('/api/scans', { target: ip, ports, udp: true })).data;
             const status = await waitForScan(id);
             if (status !== 'COMPLETED') throw new Error(status === 'PENDING' || status === 'RUNNING' ? 'The rescan is taking longer than expected. Check Scans for progress.' : `The rescan ended as ${status.toLowerCase()}.`);
-            const after = new Set((await load()).find((h) => h.ip === ip)?.ports.map((p) => p.port) ?? []);
+            const after = labels((await load()).find((h) => h.ip === ip)?.ports ?? []);
             result = {
                 at: now(),
                 open: after.size,
-                opened: [...after].filter((p) => !before.has(p)).sort((a, b) => a - b),
-                closed: [...before].filter((p) => !after.has(p)).sort((a, b) => a - b),
+                opened: [...after].filter((p) => !before.has(p)).sort(numeric),
+                closed: [...before].filter((p) => !after.has(p)).sort(numeric),
             };
         } catch (e) {
             result = { at: now(), open: before.size, opened: [], closed: [], failed: e instanceof Error && !axios.isAxiosError(e) ? e.message : apiError(e, 'The rescan could not start.') };
@@ -157,7 +167,7 @@ export default function AttackSurfacePage() {
         return hosts.filter((h) =>
             h.ip.includes(q) ||
             h.domains.some((d) => d.includes(q)) ||
-            h.ports.some((p) => p.service?.toLowerCase().includes(q) || String(p.port) === q));
+            h.ports.some((p) => p.service?.toLowerCase().includes(q) || portLabel(p.port, p.protocol) === q || String(p.port) === q));
     }, [hosts, filter]);
 
     const openPorts = hosts.reduce((acc, h) => acc + h.ports.length, 0);
@@ -361,11 +371,11 @@ export default function AttackSurfacePage() {
                                                 )}
                                                 <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
                                                     {host.ports.map((p) => (
-                                                        <li key={p.port} className="p-3">
+                                                        <li key={`${p.port}/${p.protocol}`} className="p-3">
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="min-w-0">
                                                                     <p className="text-sm">
-                                                                        <span className="font-mono font-semibold">{p.port}</span>
+                                                                        <span className="font-mono font-semibold">{portLabel(p.port, p.protocol)}</span>
                                                                         <span className="ml-2">{p.service || 'Unknown'}</span>
                                                                         {p.version && <span className="ml-2 font-mono text-xs text-muted-foreground">v{p.version}</span>}
                                                                     </p>
@@ -393,8 +403,8 @@ export default function AttackSurfacePage() {
                                                     <p className="mb-2 text-xs font-semibold text-muted-foreground">Closed since an earlier scan</p>
                                                     <ul className="flex flex-wrap gap-1.5">
                                                         {host.closed.map((p) => (
-                                                            <li key={p.port} title={`Not answering since ${formatDateTime(p.closedAt)}`} className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
-                                                                <span className="font-mono">{p.port}</span> {p.service || 'Unknown'}
+                                                            <li key={`${p.port}/${p.protocol}`} title={`Not answering since ${formatDateTime(p.closedAt)}`} className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+                                                                <span className="font-mono">{portLabel(p.port, p.protocol)}</span> {p.service || 'Unknown'}
                                                             </li>
                                                         ))}
                                                     </ul>

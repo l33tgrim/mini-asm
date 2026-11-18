@@ -8,11 +8,18 @@ import {
     providerFor, registrableDomain, servicesFromTxt, srvRecords,
 } from './discovery';
 
-export type Severity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+import { portMeta, DEFAULT_TCP_PORTS } from './ports';
+import { probeUdp } from './udp';
+import type { Severity } from './ports';
+
+export type { Severity };
+export { UDP_PROBE_PORTS } from './udp';
 
 export interface ScanResult {
     ip: string;
     port: number;
+    /** Absent means tcp. */
+    protocol?: 'tcp' | 'udp';
     service: string;
     version?: string;
     banner?: string;
@@ -26,58 +33,6 @@ export interface ScanResult {
     techStack?: string;
 }
 
-const COMMON_PORTS: Record<number, { service: string; severity: Severity; description: string }> = {
-    21: { service: 'FTP', severity: 'HIGH', description: 'File Transfer Protocol - often insecure' },
-    22: { service: 'SSH', severity: 'LOW', description: 'Secure Shell Management' },
-    23: { service: 'Telnet', severity: 'CRITICAL', description: 'Telnet - Insecure clear-text management' },
-    25: { service: 'SMTP', severity: 'MEDIUM', description: 'Email Transfer' },
-    53: { service: 'DNS', severity: 'LOW', description: 'Domain Name System' },
-    80: { service: 'HTTP', severity: 'INFO', description: 'Web Server (Cleartext)' },
-    110: { service: 'POP3', severity: 'MEDIUM', description: 'Post Office Protocol' },
-    111: { service: 'RPCBind', severity: 'HIGH', description: 'Portmapper - often used in NFS/RPC attacks' },
-    135: { service: 'RPC', severity: 'MEDIUM', description: 'Microsoft RPC Endpoint Mapper' },
-    139: { service: 'NetBIOS', severity: 'HIGH', description: 'NetBIOS Session Service' },
-    143: { service: 'IMAP', severity: 'MEDIUM', description: 'Internet Message Access Protocol' },
-    389: { service: 'LDAP', severity: 'HIGH', description: 'Lightweight Directory Access Protocol' },
-    443: { service: 'HTTPS', severity: 'INFO', description: 'Secure Web Server' },
-    445: { service: 'SMB', severity: 'HIGH', description: 'Microsoft-DS - high risk for lateral movement' },
-    465: { service: 'SMTPS', severity: 'LOW', description: 'Secure SMTP' },
-    500: { service: 'IKE', severity: 'LOW', description: 'ISAKMP / VPN Key Exchange' },
-    587: { service: 'Submission', severity: 'LOW', description: 'Email Submission Port' },
-    636: { service: 'LDAPS', severity: 'LOW', description: 'Secure LDAP' },
-    993: { service: 'IMAPS', severity: 'LOW', description: 'Secure IMAP' },
-    995: { service: 'POP3S', severity: 'LOW', description: 'Secure POP3' },
-    1194: { service: 'OpenVPN', severity: 'LOW', description: 'OpenVPN Service' },
-    1433: { service: 'MSSQL', severity: 'HIGH', description: 'Microsoft SQL Server' },
-    1521: { service: 'Oracle', severity: 'HIGH', description: 'Oracle Database' },
-    1723: { service: 'PPTP', severity: 'MEDIUM', description: 'Point-to-Point Tunneling Protocol' },
-    2049: { service: 'NFS', severity: 'HIGH', description: 'Network File System' },
-    2222: { service: 'SSH-Alt', severity: 'LOW', description: 'Alternative SSH Port' },
-    2375: { service: 'Docker', severity: 'CRITICAL', description: 'Docker Daemon (Unencrypted)' },
-    2376: { service: 'Docker-TLS', severity: 'HIGH', description: 'Docker Daemon (TLS)' },
-    3000: { service: 'Dev-Web', severity: 'INFO', description: 'Common development web port' },
-    3306: { service: 'MySQL', severity: 'HIGH', description: 'MySQL Database' },
-    3389: { service: 'RDP', severity: 'HIGH', description: 'Remote Desktop Protocol' },
-    4443: { service: 'VPN-Web', severity: 'LOW', description: 'Common VPN Web Interface' },
-    4500: { service: 'NAT-T', severity: 'LOW', description: 'IPsec NAT Traversal' },
-    5060: { service: 'SIP', severity: 'LOW', description: 'Session Initiation Protocol (VOIP)' },
-    5432: { service: 'PostgreSQL', severity: 'HIGH', description: 'PostgreSQL Database' },
-    5900: { service: 'VNC', severity: 'HIGH', description: 'Virtual Network Computing' },
-    5985: { service: 'WinRM-HTTP', severity: 'MEDIUM', description: 'Windows Remote Management' },
-    5986: { service: 'WinRM-HTTPS', severity: 'LOW', description: 'Windows Remote Management (Secure)' },
-    6379: { service: 'Redis', severity: 'HIGH', description: 'Redis Key-Value Store' },
-    6443: { service: 'K8s-API', severity: 'HIGH', description: 'Kubernetes API Server' },
-    8000: { service: 'HTTP-Alt', severity: 'INFO', description: 'Alternative Web Port' },
-    8080: { service: 'HTTP-Proxy', severity: 'INFO', description: 'Web Proxy / Alternative Port' },
-    8443: { service: 'HTTPS-Alt', severity: 'INFO', description: 'Alternative Secure Web Port' },
-    8888: { service: 'HTTP-Dev', severity: 'INFO', description: 'Development/Jupyter Web Port' },
-    9000: { service: 'SonarQube/Web', severity: 'INFO', description: 'Common tool/web port' },
-    9200: { service: 'Elasticsearch', severity: 'HIGH', description: 'Elasticsearch API' },
-    9443: { service: 'VSphere', severity: 'HIGH', description: 'VMware vSphere Web Client' },
-    10250: { service: 'Kubelet', severity: 'HIGH', description: 'Kubernetes Kubelet API' },
-    11211: { service: 'Memcached', severity: 'HIGH', description: 'Memcached Cache' },
-    27017: { service: 'MongoDB', severity: 'HIGH', description: 'MongoDB Database' },
-};
 
 const dnsPromises = dns.promises;
 
@@ -87,8 +42,8 @@ function maxSeverity(...levels: Severity[]): Severity {
     return levels.reduce((a, b) => (SEVERITY_RANK[b] > SEVERITY_RANK[a] ? b : a), 'INFO' as Severity);
 }
 
-const WEB_PORTS = new Set([80, 443, 3000, 8000, 8080, 8443, 8888]);
-const TLS_PORTS = new Set([443, 8443]);
+const WEB_PORTS = new Set([80, 81, 443, 591, 3000, 4443, 5000, 8000, 8001, 8008, 8080, 8081, 8443, 8888, 9443, 10443]);
+const TLS_PORTS = new Set([443, 4443, 8443, 9443, 10443]);
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_BANNER_BYTES = 512;
 
@@ -131,9 +86,9 @@ async function readBody(response: Response): Promise<string> {
     return text;
 }
 
-async function fetchWebDetails(ip: string, port: number, hostname?: string): Promise<WebDetails> {
+async function fetchWebDetails(ip: string, port: number, hostname?: string, useTls = TLS_PORTS.has(port)): Promise<WebDetails> {
     const details: WebDetails = { reached: false, title: '', server: '', tech: [], issues: [] };
-    const protocol = TLS_PORTS.has(port) ? 'https' : 'http';
+    const protocol = useTls ? 'https' : 'http';
     // Prefer the hostname so virtual hosts and CDNs return the real site.
     const url = `${protocol}://${hostname || ip}:${port}/`;
 
@@ -664,15 +619,42 @@ export async function getTargetIps(rawTarget: string): Promise<TargetResolution>
     return { target: parsed.value, kind: parsed.kind, ips, mappings, discoveryDetails, subdomainCount };
 }
 
-async function probePort(ip: string, port: number, hostname: string | undefined, ptrRecords: string[]): Promise<ScanResult | null> {
-    if (!(await checkPort(ip, port))) return null;
+/** Names the service on a port that is not on the known list, from what it sent back. */
+export function serviceFromBanner(banner: string | null): string | null {
+    if (!banner) return null;
+    if (/^SSH-\d/.test(banner)) return 'SSH';
+    if (/^HTTP\/\d/.test(banner)) return 'HTTP';
+    if (/^RFB \d{3}\.\d{3}/.test(banner)) return 'VNC';
+    if (/^220[ -].*ftp/i.test(banner)) return 'FTP';
+    if (/^220[ -].*(smtp|mail|esmtp)/i.test(banner)) return 'SMTP';
+    if (/^\+OK/.test(banner)) return 'POP3';
+    if (/^\* OK/.test(banner)) return 'IMAP';
+    if (/^-ERR|^-NOAUTH|redis/i.test(banner)) return 'Redis';
+    if (/mysql|mariadb/i.test(banner)) return 'MySQL';
+    if (/^220[ -]/.test(banner)) return 'FTP/SMTP';
+    return null;
+}
 
-    const meta = COMMON_PORTS[port];
+async function probePort(ip: string, port: number, hostname: string | undefined, ptrRecords: string[]): Promise<ScanResult | null> {
+    const known = portMeta(port);
     const rawBanner = await grabBanner(ip, port);
     const banner = rawBanner ? clean(rawBanner, MAX_BANNER_BYTES) : null;
 
-    const isWeb = WEB_PORTS.has(port);
-    const web = isWeb ? await fetchWebDetails(ip, port, hostname) : null;
+    // Unlisted ports: name the service from the banner, or try HTTP and HTTPS when the port stays quiet.
+    let meta = known;
+    let web: WebDetails | null = null;
+    if (WEB_PORTS.has(port)) {
+        web = await fetchWebDetails(ip, port, hostname);
+    } else if (known.service === 'Unknown') {
+        const named = serviceFromBanner(banner);
+        if (named === 'HTTP') web = await fetchWebDetails(ip, port, hostname, false);
+        if (!banner) {
+            web = await fetchWebDetails(ip, port, hostname, true);
+            if (!web.reached) web = await fetchWebDetails(ip, port, hostname, false);
+        }
+        const guess = web?.reached ? 'HTTP' : named;
+        if (guess) meta = { ...known, service: guess, description: `${guess} service on a non-standard port` };
+    }
 
     // Fingerprint on the raw banner plus the Server header, so HTTPS services are covered too.
     const fingerprint = [banner, web?.server].filter(Boolean).join(' ');
@@ -712,6 +694,7 @@ async function probePort(ip: string, port: number, hostname: string | undefined,
         service: meta.service,
         version,
         banner: banner || undefined,
+        protocol: 'tcp',
         severity: maxSeverity(meta.severity, ...issues.map((i) => i.severity)),
         description: `${meta.description}. System: ${guessSystem(port, fingerprint)}.${extraInfo}`,
         vulnerability: issues.map((i) => i.text).join('; ') || undefined,
@@ -722,11 +705,29 @@ async function probePort(ip: string, port: number, hostname: string | undefined,
     };
 }
 
-/** Probes the common port list on one host. Hosts with no open ports return an empty list. */
-export async function scanIp(ip: string, hostname?: string): Promise<ScanResult[]> {
+export interface ScanOptions {
+    /** TCP ports to check. Defaults to the common port list. */
+    ports?: number[];
+    /** Also run the UDP service probes (NTP, SNMP, DNS, SIP, SSDP, memcached). */
+    udp?: boolean;
+}
+
+/** How many TCP connects run at once against one host. */
+const CONNECT_CONCURRENCY = 100;
+
+/**
+ * Checks the chosen TCP ports on one host, then fingerprints the ones that
+ * accepted a connection. Hosts with nothing open return an empty list.
+ */
+export async function scanIp(ip: string, hostname?: string, options: ScanOptions = {}): Promise<ScanResult[]> {
     if (!isScannableIp(ip)) return [];
-    const ptrRecords = await reverseDns(ip);
-    const ports = Object.keys(COMMON_PORTS).map(Number);
-    const results = await Promise.all(ports.map((port) => probePort(ip, port, hostname, ptrRecords).catch(() => null)));
-    return results.filter((r): r is ScanResult => r !== null);
+    const ports = options.ports ?? DEFAULT_TCP_PORTS;
+    const open: number[] = [];
+    const [ptrRecords, udp] = await Promise.all([
+        reverseDns(ip),
+        options.udp ? probeUdp(ip).catch(() => []) : Promise.resolve([]),
+        pool(ports, CONNECT_CONCURRENCY, async (port) => { if (await checkPort(ip, port)) open.push(port); }),
+    ]);
+    const tcp = await Promise.all(open.sort((a, b) => a - b).map((port) => probePort(ip, port, hostname, ptrRecords).catch(() => null)));
+    return [...tcp.filter((r): r is ScanResult => r !== null), ...udp];
 }

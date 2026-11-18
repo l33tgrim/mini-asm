@@ -41,6 +41,9 @@ export function apiError(error: unknown, fallback: string): string {
     return typeof message === 'string' && message ? message : fallback;
 }
 
+/** "443" for TCP, "123/udp" for UDP, so the two never look like the same port. */
+export const portLabel = (port: number, protocol?: string | null) => (protocol === 'udp' ? `${port}/udp` : String(port));
+
 export const formatDateTime = (value: string | Date) =>
     new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 

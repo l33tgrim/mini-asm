@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { errorResponse, handleError } from '@/lib/api';
+import { parsePortSpec } from '@/lib/ports';
 
 const SEVERITY_ORDER: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
 
@@ -15,6 +16,19 @@ function parseHostMap(value: string | null): HostMap {
     }
 }
 
+type Svc = { ip: string; port: number; protocol: string; service: string | null };
+
+/** Whether a scan with these settings checked the port, so a missing finding means it was closed. */
+function coverage(portSpec: string | null, udp: boolean) {
+    let ports: Set<number>;
+    try {
+        ports = new Set(parsePortSpec(portSpec));
+    } catch {
+        ports = new Set();
+    }
+    return (f: { port: number; protocol: string }) => (f.protocol === 'udp' ? udp : ports.has(f.port));
+}
+
 const hostnames = (map: HostMap) => new Set(Object.values(map).flat());
 const MAX_CHANGE_ROWS = 100;
 
@@ -24,28 +38,31 @@ const MAX_CHANGE_ROWS = 100;
  * shared between scans, so a service counts as open in a scan when the finding
  * is linked to it.
  */
-async function changesSincePrevious(scan: { id: string; target: string; status: string; createdAt: Date; findings: { ip: string; port: number; service: string | null }[] }) {
+async function changesSincePrevious(scan: { id: string; target: string; status: string; createdAt: Date; findings: Svc[] }) {
     if (scan.status !== 'COMPLETED') return null;
 
     const previous = await prisma.scan.findFirst({
         where: { target: scan.target, status: 'COMPLETED', createdAt: { lt: scan.createdAt } },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, createdAt: true, hostMap: true, findings: { select: { ip: true, port: true, service: true } } },
+        select: { id: true, createdAt: true, hostMap: true, portSpec: true, udp: true, findings: { select: { ip: true, port: true, protocol: true, service: true } } },
     });
     if (!previous) return null;
 
-    const current = await prisma.scan.findUnique({ where: { id: scan.id }, select: { hostMap: true } });
+    const current = await prisma.scan.findUnique({ where: { id: scan.id }, select: { hostMap: true, portSpec: true, udp: true } });
     const nowHosts = hostnames(parseHostMap(current?.hostMap ?? null));
     const thenHosts = hostnames(parseHostMap(previous.hostMap));
 
-    const key = (f: { ip: string; port: number }) => `${f.ip}:${f.port}`;
+    const key = (f: Svc) => `${f.ip}:${f.port}/${f.protocol}`;
     const real = (f: { port: number }) => f.port !== 0;
     const nowServices = new Map(scan.findings.filter(real).map((f) => [key(f), f]));
     const thenServices = new Map(previous.findings.filter(real).map((f) => [key(f), f]));
-    const pickService = (f: { ip: string; port: number; service: string | null }) => ({ ip: f.ip, port: f.port, service: f.service });
+    const pickService = (f: Svc) => ({ ip: f.ip, port: f.port, protocol: f.protocol, service: f.service });
+    // Only ports both scans checked can be compared: a custom range scan says nothing about the rest.
+    const nowCovers = coverage(current?.portSpec ?? null, current?.udp ?? true);
+    const thenCovered = coverage(previous.portSpec, previous.udp);
 
-    const newServices = [...nowServices.values()].filter((f) => !thenServices.has(key(f))).map(pickService);
-    const closedServices = [...thenServices.values()].filter((f) => !nowServices.has(key(f))).map(pickService);
+    const newServices = [...nowServices.values()].filter((f) => !thenServices.has(key(f)) && thenCovered(f)).map(pickService);
+    const closedServices = [...thenServices.values()].filter((f) => !nowServices.has(key(f)) && nowCovers(f)).map(pickService);
     // Scans from before host tracking have no host map, so host changes cannot be judged against them.
     const comparable = thenHosts.size > 0 && nowHosts.size > 0;
     const newHosts = comparable ? [...nowHosts].filter((h) => !thenHosts.has(h)).sort() : [];
@@ -69,7 +86,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             where: { id },
             // ipList and hostMap are internal working data and can be large, so they are left out.
             select: {
-                id: true, target: true, status: true, type: true, currentIndex: true, totalIps: true,
+                id: true, target: true, status: true, type: true, currentIndex: true, totalIps: true, portSpec: true, udp: true,
                 startedAt: true, completedAt: true, createdAt: true, findings: true,
             },
         });

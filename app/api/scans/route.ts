@@ -10,6 +10,8 @@ const scanSummary = {
     type: true,
     currentIndex: true,
     totalIps: true,
+    portSpec: true,
+    udp: true,
     startedAt: true,
     completedAt: true,
     createdAt: true,
@@ -40,7 +42,11 @@ export async function POST(req: Request) {
         }
 
         if (typeof body.target !== 'string') return errorResponse('Target is required.', 400);
-        const scan = await startScan(body.target);
+        if (body.ports !== undefined && body.ports !== null && typeof body.ports !== 'string') {
+            return errorResponse('ports must be a string such as "default, 8000-8100".', 400);
+        }
+        if (body.udp !== undefined && typeof body.udp !== 'boolean') return errorResponse('udp must be true or false.', 400);
+        const scan = await startScan(body.target, 'MANUAL', { ports: body.ports, udp: body.udp });
         return NextResponse.json({ id: scan.id, target: scan.target, status: scan.status }, { status: 201 });
     } catch (error) {
         return handleError('POST /api/scans', error);

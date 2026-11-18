@@ -7,6 +7,23 @@ import Link from 'next/link';
 import axios from 'axios';
 import { ErrorBanner, IconButton, PageHeader, StatCard, StatusBadge } from '@/components/ui';
 import { apiError, formatDateTime } from '@/lib/ui';
+import { DEFAULT_TCP_PORTS, PORT_PRESETS, parsePortSpec } from '@/lib/ports';
+
+const UDP_SERVICES = 'DNS 53, NTP 123, SNMP 161, SSDP 1900, SIP 5060, memcached 11211';
+
+/** Builds the spec the API takes from the chosen presets and the custom box. */
+function buildSpec(presets: string[], custom: string): string {
+    return [...presets, custom.trim()].filter(Boolean).join(', ');
+}
+
+function countPorts(spec: string): { count: number; error?: string } {
+    if (!spec) return { count: 0, error: 'Pick a preset or type some ports.' };
+    try {
+        return { count: parsePortSpec(spec).length };
+    } catch (e) {
+        return { count: 0, error: (e as Error).message };
+    }
+}
 
 interface Scan {
     id: string;
@@ -27,6 +44,13 @@ export default function ScansPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [formError, setFormError] = useState<string | null>(null);
+    const [presets, setPresets] = useState<string[]>(['default']);
+    const [customPorts, setCustomPorts] = useState('');
+    const [udp, setUdp] = useState(true);
+    const portSpec = buildSpec(presets, customPorts);
+    const portCount = countPorts(portSpec);
+    const togglePreset = (id: string) =>
+        setPresets((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
     const fetchScans = useCallback(async () => {
         try {
@@ -49,12 +73,12 @@ export default function ScansPage() {
     const handleScan = async (e: React.FormEvent) => {
         e.preventDefault();
         const value = target.trim();
-        if (!value) return;
+        if (!value || portCount.error) return;
 
         setIsStarting(true);
         setFormError(null);
         try {
-            const res = await axios.post('/api/scans', { target: value });
+            const res = await axios.post('/api/scans', { target: value, ports: portSpec, udp });
             router.push(`/scans/${res.data.id}`);
         } catch (err) {
             setFormError(apiError(err, 'The scan could not be started.'));
@@ -105,7 +129,7 @@ export default function ScansPage() {
                     </div>
                     <button
                         type="submit"
-                        disabled={isStarting || !target.trim()}
+                        disabled={isStarting || !target.trim() || !!portCount.error}
                         className="flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                     >
                         {isStarting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Play className="h-4 w-4" aria-hidden />}
@@ -113,11 +137,57 @@ export default function ScansPage() {
                     </button>
                 </form>
 
-                <div className="mt-3 space-y-3">
+                <fieldset className="mt-5 space-y-3" disabled={isStarting}>
+                    <legend className="text-xs font-semibold text-muted-foreground">TCP ports</legend>
+                    <div className="flex flex-wrap gap-2">
+                        {PORT_PRESETS.map((p) => {
+                            const on = presets.includes(p.id);
+                            return (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    aria-pressed={on}
+                                    onClick={() => togglePreset(p.id)}
+                                    title={p.id === 'default' ? `${DEFAULT_TCP_PORTS.length} common service ports` : p.spec}
+                                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${on
+                                        ? 'border-primary bg-primary text-primary-foreground'
+                                        : 'border-border text-muted-foreground hover:border-secondary hover:bg-accent hover:text-foreground'}`}
+                                >
+                                    {p.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                            type="text"
+                            aria-label="Custom ports"
+                            placeholder="Custom ports, e.g. 8000-8100, 10443, 50000"
+                            autoComplete="off"
+                            spellCheck={false}
+                            maxLength={500}
+                            value={customPorts}
+                            onChange={(e) => setCustomPorts(e.target.value)}
+                            className="w-full rounded-full border border-border bg-background px-4 py-2 font-mono text-sm outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary sm:flex-1"
+                        />
+                        <p aria-live="polite" className={`shrink-0 text-xs ${portCount.error ? 'text-sev-critical' : 'text-muted-foreground'}`}>
+                            {portCount.error ?? `${portCount.count.toLocaleString('en')} TCP ${portCount.count === 1 ? 'port' : 'ports'} per host`}
+                        </p>
+                    </div>
+                    <label className="flex items-start gap-2 text-sm">
+                        <input type="checkbox" checked={udp} onChange={(e) => setUdp(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--color-primary)]" />
+                        <span>
+                            UDP service probes
+                            <span className="block text-xs text-muted-foreground">{UDP_SERVICES}. A UDP port only shows as open when the service answers a real request, so silence is not reported.</span>
+                        </span>
+                    </label>
+                </fieldset>
+
+                <div className="mt-4 space-y-3">
                     <ErrorBanner message={formError} />
                     <p className="flex items-start gap-2 text-xs text-muted-foreground">
                         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                        Domains include subdomain discovery. Each host is checked on 50 common ports. Only scan systems you own or are authorised to test.
+                        Domains include subdomain discovery. Open TCP ports get a banner grab and service checks. Large ranges on filtered hosts take longer, since each closed port waits for a timeout. Only scan systems you own or are authorised to test.
                     </p>
                 </div>
             </section>
