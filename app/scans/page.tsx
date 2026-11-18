@@ -9,7 +9,7 @@ import { ErrorBanner, IconButton, PageHeader, StatCard, StatusBadge } from '@/co
 import { apiError, formatDateTime, scheduleHref } from '@/lib/ui';
 import { DEFAULT_TCP_PORTS, PORT_PRESETS, parsePortSpec } from '@/lib/ports';
 
-const UDP_SERVICES = 'DNS 53, NTP 123, SNMP 161, SSDP 1900, SIP 5060, memcached 11211';
+const UDP_SERVICES = 'DNS 53, NTP 123, SNMP 161, IKE VPN 500 and 4500, SSDP 1900, SIP 5060, memcached 11211';
 
 /** Builds the spec the API takes from the chosen presets and the custom box. */
 function buildSpec(presets: string[], custom: string): string {

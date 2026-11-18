@@ -572,13 +572,158 @@ export async function probeMemcached(ip: string, port = 11211, timeout = 2000): 
     };
 }
 
+/* ------------------------------------------------------------------ IKE / IPsec VPN */
+
+const IKE_NAT_T_MARKER = Buffer.alloc(4); // four zero bytes in front of IKE on port 4500 (RFC 3948)
+
+function ikePayload(next: number, body: Buffer): Buffer {
+    const h = Buffer.alloc(4);
+    h[0] = next;
+    h.writeUInt16BE(body.length + 4, 2);
+    return Buffer.concat([h, body]);
+}
+
+function ikeTransform(type: number, id: number, attrs: Buffer = Buffer.alloc(0), last = false): Buffer {
+    const body = Buffer.alloc(4);
+    body[0] = type;
+    body.writeUInt16BE(id, 2);
+    return ikePayload(last ? 0 : 3, Buffer.concat([body, attrs]));
+}
+
+/** IKEv2 IKE_SA_INIT offering AES-256, SHA-256 and DH group 14, the most widely accepted set. */
+export function ikeV2SaInit(spi: Buffer): Buffer {
+    const keyLen = Buffer.from([0x80, 0x0e, 0x01, 0x00]); // key length 256 (TV)
+    const transforms = Buffer.concat([
+        ikeTransform(1, 12, keyLen), // ENCR AES-CBC
+        ikeTransform(2, 5), // PRF HMAC-SHA2-256
+        ikeTransform(3, 12), // INTEG HMAC-SHA2-256-128
+        ikeTransform(4, 14, Buffer.alloc(0), true), // DH group 14
+    ]);
+    const proposal = ikePayload(0, Buffer.concat([Buffer.from([1, 1, 0, 4]), transforms])); // #1, IKE, no SPI, 4 transforms
+    const sa = ikePayload(34, proposal);
+    const keBody = Buffer.concat([Buffer.from([0, 14, 0, 0]), randomBytes(256)]);
+    const ke = ikePayload(40, keBody);
+    const nonce = ikePayload(0, randomBytes(32));
+    const body = Buffer.concat([sa, ke, nonce]);
+    const header = Buffer.alloc(28);
+    spi.copy(header, 0);
+    header[16] = 33; // next payload: SA
+    header[17] = 0x20; // version 2.0
+    header[18] = 34; // IKE_SA_INIT
+    header[19] = 0x08; // initiator
+    header.writeUInt32BE(28 + body.length, 24);
+    return Buffer.concat([header, body]);
+}
+
+/** IKEv1 Main Mode with one AES-256, SHA-1, pre-shared key, group 14 proposal. */
+export function ikeV1MainMode(spi: Buffer): Buffer {
+    const attrs = Buffer.from([
+        0x80, 0x01, 0x00, 0x07, // encryption AES-CBC
+        0x80, 0x0e, 0x01, 0x00, // key length 256
+        0x80, 0x02, 0x00, 0x02, // hash SHA-1
+        0x80, 0x03, 0x00, 0x01, // pre-shared key
+        0x80, 0x04, 0x00, 0x0e, // group 14
+        0x80, 0x0b, 0x00, 0x01, // life type seconds
+        0x00, 0x0c, 0x00, 0x04, 0x00, 0x00, 0x70, 0x80, // life 28800 s
+    ]);
+    const transform = ikePayload(0, Buffer.concat([Buffer.from([1, 1, 0, 0]), attrs])); // #1, KEY_IKE
+    const proposal = ikePayload(0, Buffer.concat([Buffer.from([1, 1, 0, 1]), transform])); // #1, ISAKMP, no SPI, 1 transform
+    const sa = ikePayload(0, Buffer.concat([Buffer.from([0, 0, 0, 1, 0, 0, 0, 1]), proposal])); // DOI IPsec, situation identity only
+    const header = Buffer.alloc(28);
+    spi.copy(header, 0);
+    header[16] = 1; // next payload: SA
+    header[17] = 0x10; // version 1.0
+    header[18] = 2; // Identity Protection (Main Mode)
+    header.writeUInt32BE(28 + sa.length, 24);
+    return Buffer.concat([header, sa]);
+}
+
+export interface IkeReply { version: 1 | 2; exchange: number; notify?: number; vendorIds: number }
+
+/** Accepts a reply only if it echoes our initiator SPI, so stray packets are never counted. */
+export function parseIkeReply(raw: Buffer, spi: Buffer, natT = false): IkeReply | null {
+    let buf = raw;
+    if (natT) {
+        if (buf.length < 4 || buf.readUInt32BE(0) !== 0) return null;
+        buf = buf.subarray(4);
+    }
+    if (buf.length < 28 || !buf.subarray(0, 8).equals(spi)) return null;
+    const major = buf[17] >> 4;
+    if (major !== 1 && major !== 2) return null;
+    const reply: IkeReply = { version: major as 1 | 2, exchange: buf[18], vendorIds: 0 };
+    let next = buf[16];
+    let i = 28;
+    for (let n = 0; n < 32 && next !== 0 && i + 4 <= buf.length; n++) {
+        const len = buf.readUInt16BE(i + 2);
+        if (len < 4 || i + len > buf.length) break;
+        const v2Notify = major === 2 && next === 41;
+        const v1Notify = major === 1 && next === 11;
+        if ((v2Notify && len >= 8) || (v1Notify && len >= 12)) {
+            reply.notify ??= buf.readUInt16BE(i + (v2Notify ? 6 : 10));
+        }
+        if ((major === 2 && next === 43) || (major === 1 && next === 13)) reply.vendorIds++;
+        next = buf[i];
+        i += len;
+    }
+    return reply;
+}
+
+const IKE_NOTIFY: Record<number, string> = { 14: 'NO_PROPOSAL_CHOSEN', 17: 'INVALID_KE_PAYLOAD', 16388: 'NAT_DETECTION_SOURCE_IP', 16390: 'COOKIE' };
+const IKE_EXCHANGE: Record<number, string> = { 2: 'Main Mode', 5: 'Informational', 34: 'IKE_SA_INIT', 37: 'INFORMATIONAL' };
+
+function describeIke(r: IkeReply): string {
+    const exchange = IKE_EXCHANGE[r.exchange] ?? `exchange ${r.exchange}`;
+    const notify = r.notify !== undefined ? `, notify ${IKE_NOTIFY[r.notify] ?? r.notify}` : '';
+    const vendors = r.vendorIds ? `, ${r.vendorIds} vendor ID${r.vendorIds === 1 ? '' : 's'}` : '';
+    return `IKEv${r.version} ${exchange}${notify}${vendors}`;
+}
+
+export async function probeIke(ip: string, port = 500, timeout = 2000, natT = port === 4500): Promise<UdpFinding | null> {
+    const wrap = (b: Buffer) => (natT ? Buffer.concat([IKE_NAT_T_MARKER, b]) : b);
+    const spi2 = randomBytes(8);
+    const spi1 = randomBytes(8);
+    const v2 = wrap(ikeV2SaInit(spi2));
+    const v1 = wrap(ikeV1MainMode(spi1));
+    const [x2, x1] = await Promise.all([exchange(ip, port, v2, timeout), exchange(ip, port, v1, timeout)]);
+    const r2 = x2.replies.map((b) => parseIkeReply(b, spi2, natT)).find(Boolean) ?? null;
+    const r1 = x1.replies.map((b) => parseIkeReply(b, spi1, natT)).find(Boolean) ?? null;
+    if (!r2 && !r1) return null;
+
+    // A Main Mode reply (not just an error notice) means the gateway still negotiates IKEv1.
+    const ikeV1 = r1?.version === 1 && r1.exchange === 2;
+    const forensics = [
+        `UDP ${port} answered IKE requests${natT ? ' sent with the NAT traversal marker' : ''}`,
+        r2 && evidence('IKEv2 IKE_SA_INIT (AES-256, SHA-256, group 14)', v2.length, x2),
+        r2 && `Reply: ${describeIke(r2)}`,
+        r1 && evidence('IKEv1 Main Mode (AES-256, SHA-1, PSK, group 14)', v1.length, x1),
+        r1 && `Reply: ${describeIke(r1)}`,
+        'No credentials were sent and no tunnel was set up.',
+    ].filter(Boolean).join('\n');
+
+    return {
+        ip, port, protocol: 'udp',
+        service: natT ? 'IKE VPN (NAT-T)' : 'IKE VPN',
+        version: [r2 && 'IKEv2', ikeV1 && 'IKEv1'].filter(Boolean).join(', ') || undefined,
+        banner: (r2 ? describeIke(r2) : r1 ? describeIke(r1) : undefined),
+        severity: ikeV1 ? 'LOW' : 'INFO',
+        description: 'IPsec VPN gateway (IKE) reachable from the internet. Expected for a site-to-site or remote access VPN',
+        vulnerability: ikeV1 ? 'The gateway still negotiates IKEv1, which is deprecated (RFC 9395) and, with pre-shared keys, open to offline key cracking in aggressive mode' : undefined,
+        remediation: ikeV1
+            ? 'Move all tunnels to IKEv2 and disable IKEv1. If this gateway only serves fixed partners, limit UDP 500 and 4500 to their addresses.'
+            : 'If this gateway only serves fixed partners, limit UDP 500 and 4500 to their addresses. Otherwise no action is needed.',
+        forensics,
+    };
+}
+
 /* ------------------------------------------------------------------ all probes */
 
 export const UDP_PROBES = [
     { port: 53, service: 'DNS', run: probeDns },
     { port: 123, service: 'NTP', run: probeNtp },
     { port: 161, service: 'SNMP', run: probeSnmp },
+    { port: 500, service: 'IKE', run: probeIke },
     { port: 1900, service: 'SSDP', run: probeSsdp },
+    { port: 4500, service: 'IKE NAT-T', run: probeIke },
     { port: 5060, service: 'SIP', run: probeSip },
     { port: 11211, service: 'memcached', run: probeMemcached },
 ];

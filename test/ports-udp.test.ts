@@ -4,7 +4,7 @@ import dgram from 'dgram';
 import { DEFAULT_TCP_PORTS, MAX_PORTS_PER_HOST, parsePortSpec, portMeta, PortSpecError } from '../lib/ports';
 import {
     berDecode, exchange, parseMonlist, parseNtpTime, parseNtpVariables, parseSnmpResponse, parseSnmpV3Report,
-    probeDns, probeMemcached, probeNtp, probeSip, probeSnmp, probeSsdp, snmpGetRequest, snmpV3Discovery,
+    ikeV1MainMode, ikeV2SaInit, parseIkeReply, probeDns, probeIke, probeMemcached, probeNtp, probeSip, probeSnmp, probeSsdp, snmpGetRequest, snmpV3Discovery,
 } from '../lib/udp';
 import { serviceFromBanner } from '../lib/scanner';
 
@@ -253,5 +253,65 @@ test('silent services produce no finding', async () => {
         assert.equal(await probeNtp('127.0.0.1', s.port, 300), null);
     } finally {
         s.close();
+    }
+});
+
+/** Answers like a gateway: echoes the initiator SPI and sends back a header and one payload. */
+function ikeAnswer(msg: Buffer, natT: boolean, v1: 'mainmode' | 'notify' | 'silent', v2 = true): Buffer | null {
+    const ike = natT ? msg.subarray(4) : msg;
+    const major = ike[17] >> 4;
+    if ((major === 2 && !v2) || (major === 1 && v1 === 'silent')) return null;
+    const header = Buffer.alloc(28);
+    ike.copy(header, 0, 0, 8);
+    header.fill(7, 8, 16); // responder SPI
+    header[17] = ike[17];
+    let body: Buffer;
+    if (major === 2) {
+        // INVALID_KE_PAYLOAD notify
+        body = Buffer.from([0, 0, 0, 10, 0, 0, 0, 17, 0, 19]);
+        header[16] = 41; header[18] = 34; header[19] = 0x20;
+    } else if (v1 === 'mainmode') {
+        body = Buffer.from([0, 0, 0, 20, ...Buffer.alloc(16)]); // vendor ID
+        header[16] = 13; header[18] = 2;
+    } else {
+        body = Buffer.from([0, 0, 0, 12, 0, 0, 0, 1, 1, 0, 0, 14]); // NO-PROPOSAL-CHOSEN
+        header[16] = 11; header[18] = 5;
+    }
+    header.writeUInt32BE(28 + body.length, 24);
+    const out = Buffer.concat([header, body]);
+    return natT ? Buffer.concat([Buffer.alloc(4), out]) : out;
+}
+
+test('IKE replies must echo our SPI', () => {
+    const spi = Buffer.from('0102030405060708', 'hex');
+    const req = ikeV2SaInit(spi);
+    assert.equal(req.readUInt32BE(24), req.length);
+    assert.equal(ikeV1MainMode(spi).readUInt32BE(24), ikeV1MainMode(spi).length);
+    const reply = ikeAnswer(req, false, 'notify')!;
+    assert.deepEqual(parseIkeReply(reply, spi), { version: 2, exchange: 34, notify: 17, vendorIds: 0 });
+    assert.equal(parseIkeReply(reply, Buffer.alloc(8, 9)), null);
+    assert.equal(parseIkeReply(Buffer.from('junk'), spi), null);
+});
+
+test('IKE probe finds a VPN gateway and flags IKEv1 only when it negotiates', async () => {
+    const v2only = await fakeServer((m) => ikeAnswer(m, false, 'notify'));
+    const v1 = await fakeServer((m) => ikeAnswer(m, true, 'mainmode', false));
+    const quiet = await fakeServer(() => null);
+    try {
+        const [a, b, c] = await Promise.all([
+            probeIke('127.0.0.1', v2only.port, 800),
+            probeIke('127.0.0.1', v1.port, 800, true),
+            probeIke('127.0.0.1', quiet.port, 300),
+        ]);
+        assert.equal(a?.severity, 'INFO');
+        assert.equal(a?.version, 'IKEv2');
+        assert.match(a!.forensics!, /INVALID_KE_PAYLOAD/);
+        assert.equal(b?.severity, 'LOW');
+        assert.equal(b?.version, 'IKEv1');
+        assert.equal(b?.service, 'IKE VPN (NAT-T)');
+        assert.match(b!.vulnerability!, /IKEv1/);
+        assert.equal(c, null);
+    } finally {
+        v2only.close(); v1.close(); quiet.close();
     }
 });

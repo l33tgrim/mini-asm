@@ -191,6 +191,16 @@ and only reports a port as open when the service answers. Silence is never repor
   MAC, reboot count and uptime without any credentials.
 - DNS 53: version.bind and an open recursion test.
 - SSDP 1900, SIP 5060 and memcached 11211: the server header or version string.
+- IKE 500 and 4500 (NAT traversal): an IKEv2 IKE_SA_INIT and an IKEv1 Main Mode
+  offer. Any reply that echoes our SPI, even a "no proposal chosen" notice, shows a
+  VPN gateway. That alone is INFO; a gateway that still negotiates IKEv1 is LOW.
+  No credentials are sent and no tunnel is set up.
+
+A UDP service that ignores us gives no finding, even if another scanner lists it.
+That happens when the device only answers certain source addresses, or when the
+network the scanner runs from blocks outbound UDP (office firewalls often block
+SNMP, NTP and IKE). If a port shows up elsewhere but not here, scan the single IP
+from a network without that filtering, such as a phone hotspot.
 
 Each finding records what was sent, how many bytes came back and the amplification
 factor, so the evidence can be checked by hand. UDP findings show as `123/udp`.
