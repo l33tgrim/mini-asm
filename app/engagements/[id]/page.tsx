@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import axios from 'axios';
 import { ErrorBanner, SeverityBadge } from '@/components/ui';
 import { apiError } from '@/lib/ui';
+import { ACTIONABLE, groupResults, type ResultGroup } from '@/lib/group-results';
 import {
     Shield, Plus, CheckCircle2, CircleDashed, Play, Lock, Unlock, AlertTriangle,
     Copy, ClipboardCheck, Terminal, FileText, Trash2, Sparkles
@@ -33,6 +34,49 @@ const runChip: Record<string, string> = {
 };
 const chip = 'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide';
 
+function Evidence({ text }: { text?: string }) {
+    if (!text) return null;
+    return <pre className="text-[11px] mt-2 whitespace-pre-wrap text-foreground/80 font-mono bg-background/50 rounded p-2 overflow-x-auto">{text}</pre>;
+}
+
+/** One issue with every target it was found on, like the grouped findings page. */
+function IssueCard({ g }: { g: ResultGroup<Result> }) {
+    const single = g.items.length === 1 ? g.items[0] : null;
+    const targets = `${g.items.length} target${g.items.length === 1 ? '' : 's'}`;
+    return (
+        <div className="p-4 rounded-2xl bg-card border border-border">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <h3 className="font-bold text-sm">{g.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        {g.scenarioName} · {single ? single.target : `on ${targets}`}
+                        {g.attckTechnique && <span className="font-mono"> · {g.attckTechnique}</span>}
+                    </p>
+                </div>
+                <span className="flex shrink-0 items-center gap-1.5">
+                    <SeverityBadge severity={g.severity} />
+                    <span className={`${chip} ${outcomeChip[g.outcome] || outcomeChip.INFO}`}>{g.outcome}</span>
+                </span>
+            </div>
+            {single ? <Evidence text={single.result.evidence} /> : (
+                <details className="mt-2">
+                    <summary className="cursor-pointer text-xs font-medium text-primary">Show {targets}</summary>
+                    <div className="mt-2 space-y-2">
+                        {g.items.map((i) => (
+                            <div key={i.result.id} className="p-3 rounded-lg border border-border bg-background">
+                                <code className="text-xs font-mono font-semibold">{i.target}</code>
+                                {i.result.title !== g.title && <p className="text-[11px] text-muted-foreground mt-0.5">{i.result.title}</p>}
+                                <Evidence text={i.result.evidence} />
+                            </div>
+                        ))}
+                    </div>
+                </details>
+            )}
+            {g.remediation && <p className="text-[11px] mt-2 text-foreground">Fix: {g.remediation}</p>}
+        </div>
+    );
+}
+
 export default function EngagementDetail() {
     const { id } = useParams<{ id: string }>();
     const [eng, setEng] = useState<Engagement | null>(null);
@@ -45,6 +89,7 @@ export default function EngagementDetail() {
     const [copied, setCopied] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [missing, setMissing] = useState(false);
+    const [view, setView] = useState<'issue' | 'run'>('issue');
     const [ai, setAi] = useState<{ risk: { score: number; grade: string; headline: string }; narrative: string; plannedBy: string } | null>(null);
 
     const load = useCallback(() => axios.get(`/api/engagements/${id}`).then((r) => setEng(r.data)).catch((e) => {
@@ -126,6 +171,9 @@ export default function EngagementDetail() {
     if (missing) return <p className="py-24 text-center text-sm text-muted-foreground">This engagement does not exist.</p>;
     if (!eng) return error ? <ErrorBanner message={error} /> : <div className="text-sm text-muted-foreground">Loading engagement…</div>;
     const authorized = eng.status === 'AUTHORIZED' || eng.status === 'ACTIVE';
+    const groups = groupResults(eng.runs);
+    const issues = groups.filter((g) => ACTIONABLE.has(g.outcome));
+    const passed = groups.filter((g) => !ACTIONABLE.has(g.outcome));
 
     return (
         <div className="space-y-6">
@@ -235,7 +283,35 @@ export default function EngagementDetail() {
 
             {/* Results */}
             <section>
-                <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2"><FileText className="w-4 h-4" /> Results</h2>
+                <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><FileText className="w-4 h-4" /> Results</h2>
+                    {eng.runs.length > 0 && (
+                        <div className="flex rounded-full border border-border bg-card p-0.5 text-xs font-semibold">
+                            {(['issue', 'run'] as const).map((v) => (
+                                <button key={v} onClick={() => setView(v)} aria-pressed={view === v}
+                                    className={`rounded-full px-3 py-1 ${view === v ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+                                    {v === 'issue' ? 'By issue' : 'By run'}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                {view === 'issue' && eng.runs.length > 0 && (
+                    <div className="space-y-3">
+                        <p className="text-xs text-muted-foreground">
+                            {issues.length === 0 ? 'Nothing to fix in the latest runs.' : `${issues.length} issue${issues.length === 1 ? '' : 's'} to look at`}
+                            {' '}from the latest run of each scenario per target.
+                        </p>
+                        {issues.map((g) => <IssueCard key={g.key} g={g} />)}
+                        {passed.length > 0 && (
+                            <details className="rounded-2xl border border-border bg-card">
+                                <summary className="cursor-pointer px-5 py-3 text-sm font-medium text-muted-foreground">Passed checks and notes ({passed.length})</summary>
+                                <div className="space-y-3 p-3 pt-0">{passed.map((g) => <IssueCard key={g.key} g={g} />)}</div>
+                            </details>
+                        )}
+                    </div>
+                )}
+                {view === 'run' && (
                 <div className="space-y-3">
                     {eng.runs.map((r) => (
                         <div key={r.id} className="p-4 rounded-2xl bg-card border border-border">
@@ -262,8 +338,9 @@ export default function EngagementDetail() {
                             </div>
                         </div>
                     ))}
-                    {eng.runs.length === 0 && <p className="text-xs text-muted-foreground">No runs yet.</p>}
                 </div>
+                )}
+                {eng.runs.length === 0 && <p className="text-xs text-muted-foreground">No runs yet.</p>}
             </section>
 
             {/* Audit */}

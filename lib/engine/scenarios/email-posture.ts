@@ -1,15 +1,31 @@
 import dns from 'dns';
 import type { Scenario, ScenarioResult } from '../types';
 import { classifyScope } from '@/lib/safety/scope';
+import { registrableDomain } from '@/lib/discovery';
 
 const dnsp = dns.promises;
 
-async function txt(name: string): Promise<string[]> {
+/** TXT records for a name, or null when the lookup itself failed (timeout, SERVFAIL). */
+async function txt(name: string): Promise<string[] | null> {
     try {
         return (await dnsp.resolveTxt(name)).map((c) => c.join(''));
-    } catch {
-        return [];
+    } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        return code === 'ENODATA' || code === 'ENOTFOUND' ? [] : null;
     }
+}
+
+/** The DMARC policy tag, not sp= or the other tags that end in p. */
+export function dmarcPolicy(record: string, subdomain = false): string {
+    const tags = new Map(record.split(';').map((t) => t.trim().split('=').map((v) => v.trim().toLowerCase()) as [string, string]));
+    const p = tags.get('p') || 'none';
+    return subdomain ? tags.get('sp') || p : p;
+}
+
+/** SPF all mechanism, read from the end of the record. */
+export function spfAll(record: string): string | null {
+    const m = record.toLowerCase().match(/(?:^|\s)([+?~-]?)all(?:\s|$)/);
+    return m ? (m[1] || '+') : null;
 }
 
 /**
@@ -34,30 +50,49 @@ export const emailPosture: Scenario = {
             return results;
         }
 
-        const domain = ctx.target.replace(/\.$/, '');
-        const root = txt(domain);
-        const dmarc = txt(`_dmarc.${domain}`);
-        const [rootTxt, dmarcTxt] = await Promise.all([root, dmarc]);
-
-        const spf = rootTxt.find((r) => r.toLowerCase().includes('v=spf1'));
-        const dmarcRec = dmarcTxt.find((r) => r.toLowerCase().includes('v=dmarc1'));
-
-        if (!spf) {
-            results.push({ title: 'No SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: domain, attckTechnique: 'T1566 Phishing', evidence: 'No v=spf1 TXT record found.', remediation: 'Publish an SPF record listing authorised senders and end it with -all.' });
-        } else if (spf.includes('+all') || spf.includes('?all')) {
-            results.push({ title: 'Permissive SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: domain, evidence: `SPF permits unlisted senders: ${spf}`, remediation: 'Tighten SPF to -all (hard fail).' });
-        } else {
-            results.push({ title: 'SPF present', severity: 'INFO', outcome: 'SECURE', target: domain, evidence: spf });
+        const host = ctx.target.replace(/\.$/, '').toLowerCase();
+        // Mail is sent from the organisation domain, so www.example.co.za is
+        // judged by the records on example.co.za. DMARC falls back to the
+        // organisation domain the same way receivers do (RFC 7489 section 6.6.3).
+        const org = registrableDomain(host) || host;
+        const isSub = org !== host;
+        const [hostTxt, hostDmarc, orgTxt, orgDmarc] = await Promise.all([
+            txt(host), txt(`_dmarc.${host}`), isSub ? txt(org) : Promise.resolve(null), isSub ? txt(`_dmarc.${org}`) : Promise.resolve(null),
+        ]);
+        if (hostTxt === null && (!isSub || orgTxt === null)) {
+            results.push({ title: 'Email records could not be read', severity: 'INFO', outcome: 'ERROR', target: host, evidence: `The DNS lookup for ${host} failed, so SPF and DMARC were not judged.` });
+            return results;
         }
 
-        if (!dmarcRec) {
-            results.push({ title: 'No DMARC record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: domain, attckTechnique: 'T1566 Phishing', evidence: 'No v=DMARC1 record at _dmarc.' + domain, remediation: 'Publish a DMARC record, start at p=none to monitor, then move to p=quarantine/reject.' });
+        const findSpf = (records: string[] | null) => records?.find((r) => r.toLowerCase().startsWith('v=spf1'));
+        const findDmarc = (records: string[] | null) => records?.find((r) => r.toLowerCase().startsWith('v=dmarc1'));
+
+        let spf = findSpf(hostTxt);
+        let spfAt = host;
+        if (!spf && isSub) { spf = findSpf(orgTxt); spfAt = org; }
+
+        if (!spf) {
+            results.push({ title: 'No SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: org, attckTechnique: 'T1566 Phishing', evidence: `No v=spf1 TXT record on ${isSub ? `${host} or ${org}` : host}.`, remediation: 'Publish an SPF record listing authorised senders and end it with -all.' });
+        } else if (['+', '?'].includes(spfAll(spf) ?? '')) {
+            results.push({ title: 'Permissive SPF record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: spfAt, evidence: `SPF permits unlisted senders: ${spf}`, remediation: 'Tighten SPF to -all (hard fail).' });
         } else {
-            const policy = (dmarcRec.match(/p=(\w+)/)?.[1] || 'none').toLowerCase();
+            results.push({ title: 'SPF present', severity: 'INFO', outcome: 'SECURE', target: spfAt, evidence: spf });
+        }
+
+        let dmarc = findDmarc(hostDmarc);
+        let dmarcAt = host;
+        if (!dmarc && isSub) { dmarc = findDmarc(orgDmarc); dmarcAt = org; }
+
+        if (!dmarc) {
+            results.push({ title: 'No DMARC record', severity: 'MEDIUM', outcome: 'VULNERABLE', target: org, attckTechnique: 'T1566 Phishing', evidence: `No v=DMARC1 record at _dmarc.${host}${isSub ? ` or _dmarc.${org}` : ''}.`, remediation: 'Publish a DMARC record, start at p=none to monitor, then move to p=quarantine/reject.' });
+        } else {
+            const inherited = dmarcAt !== host;
+            const policy = dmarcPolicy(dmarc, inherited);
+            const evidence = inherited ? `${dmarc}\n(${host} is covered by the record on _dmarc.${org})` : dmarc;
             if (policy === 'none') {
-                results.push({ title: 'DMARC policy is monitor-only (p=none)', severity: 'LOW', outcome: 'VULNERABLE', target: domain, evidence: dmarcRec, remediation: 'Move DMARC to p=quarantine then p=reject once reporting is clean.' });
+                results.push({ title: 'DMARC policy is monitor-only (p=none)', severity: 'LOW', outcome: 'VULNERABLE', target: dmarcAt, evidence, remediation: 'Move DMARC to p=quarantine then p=reject once reporting is clean.' });
             } else {
-                results.push({ title: `DMARC enforced (p=${policy})`, severity: 'INFO', outcome: 'SECURE', target: domain, evidence: dmarcRec });
+                results.push({ title: `DMARC enforced (p=${policy})`, severity: 'INFO', outcome: 'SECURE', target: dmarcAt, evidence });
             }
         }
         return results;

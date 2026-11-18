@@ -120,6 +120,18 @@ on that engagement's page. Breach proofs are listed separately and stay locked
 unless the engagement is authorised, in ACTIVE mode, and the asset is
 ownership-verified, the same gates as everywhere else.
 
+### Engagement results
+
+Engagement results open grouped by issue, the same way the Findings page
+groups by port: "Weak cookie attributes" appears once with the hosts it was
+found on, and only the latest run of each scenario per target counts. Passed
+checks sit in a collapsed section underneath. "By run" shows the old run by
+run view.
+
+The email posture check judges a host by the domain that sends the mail. A
+run against `www.example.co.za` reads SPF and DMARC on `example.co.za` when the
+host has none of its own, the same fallback mail receivers use.
+
 ## Authorisation first
 
 Nothing active runs without an authorised engagement and ownership-verified scope.
