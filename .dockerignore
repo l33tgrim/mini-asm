@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 .miniasm-stop
 Dockerfile
 docker-compose.yml
+mini-asm
